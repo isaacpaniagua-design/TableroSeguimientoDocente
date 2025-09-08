@@ -290,7 +290,6 @@
             data-client_id="462104222746-m1hkvicmjlj1qi7ggiliq708f9v128ko.apps.googleusercontent.com"
             data-context="signin"
             data-ux_mode="popup"
-            data-callback="handleCredentialResponse"
             data-auto_prompt="false"
           ></div>
 
@@ -1597,6 +1596,25 @@
         updateRefreshIndicator();
       }
 
+      // Try to initialize Google Sign-In once the library is ready
+      (function tryInitGSI() {
+        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+          try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
+          return;
+        }
+        // Fallbacks: attempt on load events
+        window.addEventListener('load', function () {
+          if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+            try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
+          }
+        });
+        document.addEventListener('readystatechange', function () {
+          if (document.readyState === 'complete' && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+            try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
+          }
+        });
+      })();
+
       function setLastRefreshNow() {
         lastRefreshAt = new Date();
         updateRefreshIndicator();
@@ -2493,34 +2511,7 @@
         doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
         doc.text(`Total de Docentes: ${teachers.length}`, 14, 45);
 
-        // General progress stats for chart
-        let full = 0, partial = 0, none = 0;
-        teachers.forEach((t) => {
-          const completed = activities.filter((a) => t.activities[a]).length;
-          if (completed === activities.length && activities.length > 0) full++;
-          else if (completed > 0) partial++;
-          else none++;
-        });
-
-        // Chart image
-        const canvas = document.createElement("canvas");
-        canvas.width = 500; canvas.height = 300;
-        const ctx = canvas.getContext("2d");
-        const chart = new Chart(ctx, {
-          type: "doughnut",
-          data: {
-            labels: ["Completitud Total", "Completitud Parcial", "Sin Completar"],
-            datasets: [{ data: [full, partial, none], backgroundColor: ["#2E7D32", "#F59E0B", "#EF4444"], borderColor: "#fff", borderWidth: 2 }],
-          },
-          options: { responsive: false, maintainAspectRatio: false, cutout: "55%", plugins: { legend: { display: false } } },
-        });
-        await new Promise((r) => setTimeout(r, 100));
-        const chartImg = canvas.toDataURL("image/png");
-        try { chart.destroy(); } catch(e) {}
-
-        doc.setFontSize(14);
-        doc.text("Progreso General", 14, 60);
-        doc.addImage(chartImg, "PNG", 14, 65, 120, 80);
+        // (removed duplicate chart generation block)
         doc.setFontSize(10);
         doc.text(`Completitud Total: ${full}`, 140, 80);
         doc.text(`Completitud Parcial: ${partial}`, 140, 90);
@@ -2770,6 +2761,15 @@
             showNotification("No se pudieron eliminar", "error");
           }
         }
+      }
+    </script>
+    <script>
+      // Ensure global access to handlers after definitions
+      if (typeof window !== 'undefined') {
+        window.initiateGoogleSignIn = window.initiateGoogleSignIn || initiateGoogleSignIn;
+        window.demoLogin = window.demoLogin || demoLogin;
+        window.handleCredentialResponse = window.handleCredentialResponse || handleCredentialResponse;
+        window.initializeGoogleSignIn = window.initializeGoogleSignIn || initializeGoogleSignIn;
       }
     </script>
   </body>
