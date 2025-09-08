@@ -3,9 +3,20 @@
 const WEB_APP_URL =
   "https://script.google.com/macros/s/AKfycbys5tkzAYOJdrjoSITBUDm2rkypN4OW34IHyDYBEzSMkChcHUukKyog7a3a5MypPFYLdw/exec";
 let __AUTH_ID_TOKEN = null;
+try {
+  const saved = typeof sessionStorage !== "undefined" && sessionStorage.getItem("ID_TOKEN");
+  if (saved) __AUTH_ID_TOKEN = saved;
+} catch (e) {}
 
 function setAuthToken(idToken) {
   __AUTH_ID_TOKEN = idToken || null;
+  try {
+    if (idToken) {
+      sessionStorage.setItem("ID_TOKEN", idToken);
+    } else {
+      sessionStorage.removeItem("ID_TOKEN");
+    }
+  } catch (e) {}
 }
 
 // JSONP request helper for Apps Script (avoids CORS limits)

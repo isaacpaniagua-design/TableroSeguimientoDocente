@@ -1174,10 +1174,9 @@
       // Authentication and Login Functions
       let currentUser = null;
       const INSTITUTIONAL_DOMAINS = [
-        "@potros.itson.edu.mx",
+        "potros.itson.edu.mx",
         "itson.edu.mx",
-        "@itson.edu.mx",
-      ]; // Add your institutional domains
+      ]; // Dominios institucionales permitidos
       const DEMO_ENABLED = false; // Oculta/bloquea el acceso demo cuando es false
 
       // Initialize Google Sign-In
@@ -1365,14 +1364,22 @@
 
       // Check if user is already logged in (for page refresh)
       function checkExistingSession() {
-        // In a real app, you would check for a valid session token
-        // For demo purposes, we'll just show the login page
-        const hasValidSession = false; // Replace with actual session check
-
-        if (hasValidSession) {
+        try {
+          const token = sessionStorage.getItem("ID_TOKEN");
+          if (!token) throw new Error("no token");
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          if (!validateInstitutionalEmail(payload.email)) throw new Error("domain");
+          currentUser = {
+            name: payload.name,
+            email: payload.email,
+            picture: payload.picture,
+            domain: payload.hd || payload.email.split("@")[1],
+          };
+          if (window.setAuthToken) window.setAuthToken(token);
+          else if (window.api && window.api.setAuthToken) window.api.setAuthToken(token);
           // Auto-login user
           loginSuccess();
-        } else {
+        } catch (e) {
           // Show login page
           document.getElementById("loginPage").classList.remove("hidden");
           document.getElementById("mainDashboard").classList.add("hidden");
