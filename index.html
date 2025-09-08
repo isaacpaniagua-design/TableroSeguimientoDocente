@@ -1025,10 +1025,100 @@
           }
           updateStats();
           updateCharts();
+          // Start auto refresh after first successful load
+          startAutoRefresh();
         } catch (err) {
           console.error("Error cargando datos:", err);
           document.getElementById("loadingState").classList.add("hidden");
           document.getElementById("emptyState").classList.remove("hidden");
+        }
+      }
+
+      // Auto-refresh configuration
+      const REFRESH_INTERVAL_MS = 60000; // 60s
+      const REFRESH_UPDATE_UI_MS = 1000; // 1s indicator update
+      let autoRefreshTimer = null;
+      let indicatorTimer = null;
+      let autoRefreshPaused = false;
+      let lastRefreshAt = null;
+
+      function ensureRefreshIndicatorUI() {
+        let bar = document.getElementById("refreshIndicatorBar");
+        if (!bar) {
+          bar = document.createElement("div");
+          bar.id = "refreshIndicatorBar";
+          bar.className = "fixed bottom-4 right-4 z-40 bg-white shadow-lg border border-gray-200 rounded-lg px-4 py-2 flex items-center space-x-3";
+          bar.innerHTML = `
+            <span class="text-xs text-gray-600" id="lastRefreshText">Sin actualizar</span>
+            <button id="toggleRefreshBtn" class="text-xs px-2 py-1 rounded bg-primary-500 text-white hover:bg-primary-600">Pausar</button>
+          `;
+          document.body.appendChild(bar);
+          const btn = document.getElementById("toggleRefreshBtn");
+          if (btn) btn.addEventListener("click", toggleAutoRefresh);
+        }
+        if (indicatorTimer) clearInterval(indicatorTimer);
+        indicatorTimer = setInterval(updateRefreshIndicator, REFRESH_UPDATE_UI_MS);
+        updateRefreshIndicator();
+      }
+
+      function setLastRefreshNow() {
+        lastRefreshAt = new Date();
+        updateRefreshIndicator();
+      }
+
+      function updateRefreshIndicator() {
+        const el = document.getElementById("lastRefreshText");
+        if (!el) return;
+        if (!lastRefreshAt) { el.textContent = "Sin actualizar"; return; }
+        const secs = Math.floor((Date.now() - lastRefreshAt.getTime()) / 1000);
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        const mm = m > 0 ? `${m}m ` : "";
+        const ss = `${s}s`;
+        el.textContent = `Actualizado hace ${mm}${ss}`;
+        const btn = document.getElementById("toggleRefreshBtn");
+        if (btn) btn.textContent = autoRefreshPaused ? "Reanudar" : "Pausar";
+      }
+
+      function toggleAutoRefresh() {
+        autoRefreshPaused = !autoRefreshPaused;
+        if (autoRefreshPaused) {
+          stopAutoRefresh();
+        } else {
+          startAutoRefresh();
+          setLastRefreshNow();
+        }
+        updateRefreshIndicator();
+      }
+
+      function startAutoRefresh() {
+        stopAutoRefresh();
+        ensureRefreshIndicatorUI();
+        autoRefreshTimer = setInterval(async () => {
+          try {
+            const resp = await api.getPagedData(1, 1000);
+            const mapped = mapPagedResponseToModel(resp);
+            teachers = mapped.teachers;
+            activities = mapped.activities;
+            filteredTeachers = [...teachers];
+            buildTable();
+            updateStats();
+            updateCharts();
+            setLastRefreshNow();
+          } catch (e) {
+            console.error("Auto-refresh error:", e);
+          }
+        }, REFRESH_INTERVAL_MS);
+      }
+
+      function stopAutoRefresh() {
+        if (autoRefreshTimer) {
+          clearInterval(autoRefreshTimer);
+          autoRefreshTimer = null;
+        }
+        if (indicatorTimer) {
+          clearInterval(indicatorTimer);
+          indicatorTimer = null;
         }
       }
 
@@ -2109,7 +2199,27 @@
           doc.setFontSize(12); doc.setTextColor("#000000");
           doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
           doc.text(`Total de Docentes: ${rows.length}`, 14, 45);
-          doc.autoTable({ startY: 55, head: [["ID","Nombre","Apellidos",...activityHeaders,"Progreso"]], body: rows, theme: "grid", headStyles: { fillColor: "#2E7D32", textColor: "#FFFFFF", fontStyle: "bold" }, alternateRowStyles: { fillColor: "#f9f9f9" }, styles: { fontSize: 8, cellPadding: 3 } });
+          // General progress chart
+          let full = 0, partial = 0, none = 0;
+          (resp.teachers || []).forEach((t) => {
+            const completed = activityHeaders.reduce((acc, h) => acc + (t[h] ? 1 : 0), 0);
+            if (completed === activityHeaders.length && activityHeaders.length > 0) full++;
+            else if (completed > 0) partial++;
+            else none++;
+          });
+          const canvas = document.createElement("canvas"); canvas.width = 500; canvas.height = 300;
+          const ctx = canvas.getContext("2d");
+          const chart = new Chart(ctx, { type: "doughnut", data: { labels: ["Completitud Total","Completitud Parcial","Sin Completar"], datasets: [{ data: [full, partial, none], backgroundColor: ["#2E7D32","#F59E0B","#EF4444"], borderColor: "#fff", borderWidth: 2 }] }, options: { responsive: false, maintainAspectRatio: false, cutout: "55%", plugins: { legend: { display: false } } } });
+          await new Promise((r)=>setTimeout(r,100));
+          const img = canvas.toDataURL("image/png");
+          try { chart.destroy(); } catch(e) {}
+          doc.setFontSize(14); doc.text("Progreso General", 14, 60);
+          doc.addImage(img, "PNG", 14, 65, 120, 80);
+          doc.setFontSize(10);
+          doc.text(`Completitud Total: ${full}`, 140, 80);
+          doc.text(`Completitud Parcial: ${partial}`, 140, 90);
+          doc.text(`Sin Completar: ${none}`, 140, 100);
+          doc.autoTable({ startY: 155, head: [["ID","Nombre","Apellidos",...activityHeaders,"Progreso"]], body: rows, theme: "grid", headStyles: { fillColor: "#2E7D32", textColor: "#FFFFFF", fontStyle: "bold" }, alternateRowStyles: { fillColor: "#f9f9f9" }, styles: { fontSize: 8, cellPadding: 3 } });
           doc.save(`reporte-academico-${new Date().toISOString().slice(0, 10)}.pdf`);
         } catch (e) { console.error(e); }
       }
