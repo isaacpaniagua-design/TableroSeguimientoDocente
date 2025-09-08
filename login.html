@@ -2511,11 +2511,7 @@
         doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
         doc.text(`Total de Docentes: ${teachers.length}`, 14, 45);
 
-        // (removed duplicate chart generation block)
-        doc.setFontSize(10);
-        doc.text(`Completitud Total: ${full}`, 140, 80);
-        doc.text(`Completitud Parcial: ${partial}`, 140, 90);
-        doc.text(`Sin Completar: ${none}`, 140, 100);
+        // (chart will be rendered below after computing stats)
 
         // General progress stats for chart
         let full = 0, partial = 0, none = 0;
