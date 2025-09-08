@@ -31,6 +31,17 @@
           },
         },
       };
+      // Ensure functions are available for inline onclick/data-callback
+      if (typeof window !== 'undefined') {
+        try {
+          window.initiateGoogleSignIn = initiateGoogleSignIn;
+          window.demoLogin = demoLogin;
+          window.handleCredentialResponse = handleCredentialResponse;
+          window.initializeGoogleSignIn = initializeGoogleSignIn;
+        } catch (e) {
+          console && console.warn && console.warn('Function export error:', e);
+        }
+      }
     </script>
 
     <style>
