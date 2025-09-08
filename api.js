@@ -4,7 +4,8 @@ const WEB_APP_URL =
   "https://script.google.com/macros/s/AKfycbys5tkzAYOJdrjoSITBUDm2rkypN4OW34IHyDYBEzSMkChcHUukKyog7a3a5MypPFYLdw/exec";
 let __AUTH_ID_TOKEN = null;
 try {
-  const saved = typeof sessionStorage !== "undefined" && sessionStorage.getItem("ID_TOKEN");
+  const saved =
+    typeof sessionStorage !== "undefined" && sessionStorage.getItem("ID_TOKEN");
   if (saved) __AUTH_ID_TOKEN = saved;
 } catch (e) {}
 

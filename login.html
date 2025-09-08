@@ -276,7 +276,7 @@
         <div class="mb-6">
           <div
             id="g_id_onload"
-            data-client_id="YOUR_GOOGLE_CLIENT_ID"
+            data-client_id="462104222746-m1hkvicmjlj1qi7ggiliq708f9v128ko.apps.googleusercontent.com"
             data-context="signin"
             data-ux_mode="popup"
             data-callback="handleCredentialResponse"
@@ -1173,11 +1173,30 @@
     <script>
       // Authentication and Login Functions
       let currentUser = null;
-      const INSTITUTIONAL_DOMAINS = [
-        "potros.itson.edu.mx",
-        "itson.edu.mx",
-      ]; // Dominios institucionales permitidos
+      const INSTITUTIONAL_DOMAINS = ["potros.itson.edu.mx", "itson.edu.mx"]; // Dominios institucionales permitidos
       const DEMO_ENABLED = false; // Oculta/bloquea el acceso demo cuando es false
+
+      // Decode Google ID token payload (Base64URL safe)
+      function parseJwt(token) {
+        try {
+          const base64Url = token.split(".")[1];
+          if (!base64Url) return null;
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const padded = base64.padEnd(
+            base64.length + ((4 - (base64.length % 4 || 4)) % 4),
+            "="
+          );
+          const json = decodeURIComponent(
+            atob(padded)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          return JSON.parse(json);
+        } catch (e) {
+          return null;
+        }
+      }
 
       // Initialize Google Sign-In
       function initializeGoogleSignIn() {
@@ -1198,7 +1217,8 @@
 
         try {
           // Decode the JWT token (in a real app, validate this server-side)
-          const payload = JSON.parse(atob(response.credential.split(".")[1]));
+          const payload = parseJwt(response.credential);
+          if (!payload) throw new Error("invalid id token");
 
           // Validate institutional domain
           if (validateInstitutionalEmail(payload.email)) {
@@ -1367,8 +1387,10 @@
         try {
           const token = sessionStorage.getItem("ID_TOKEN");
           if (!token) throw new Error("no token");
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          if (!validateInstitutionalEmail(payload.email)) throw new Error("domain");
+          const payload = parseJwt(token);
+          if (!payload) throw new Error("invalid token");
+          if (!validateInstitutionalEmail(payload.email))
+            throw new Error("domain");
           currentUser = {
             name: payload.name,
             email: payload.email,
@@ -1376,7 +1398,8 @@
             domain: payload.hd || payload.email.split("@")[1],
           };
           if (window.setAuthToken) window.setAuthToken(token);
-          else if (window.api && window.api.setAuthToken) window.api.setAuthToken(token);
+          else if (window.api && window.api.setAuthToken)
+            window.api.setAuthToken(token);
           // Auto-login user
           loginSuccess();
         } catch (e) {
