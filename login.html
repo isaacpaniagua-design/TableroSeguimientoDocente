@@ -778,55 +778,7 @@
                   </div>
                 </div>
 
-                <!-- Search and Filters -->
-                <div class="mb-6">
-                  <div class="relative">
-                    <input
-                      type="text"
-                      id="searchInput"
-                      placeholder="Buscar por ID, nombre o apellidos..."
-                      onkeyup="filterTable()"
-                      class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    />
-                    <i
-                      class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                    ></i>
-                  </div>
-                </div>
-
-                <!-- Loading State -->
-                <div id="loadingState" class="text-center py-12">
-                  <div class="loading-spinner mx-auto mb-4"></div>
-                  <p class="text-gray-500">Cargando datos...</p>
-                </div>
-
-                <!-- Teachers Table -->
-                <div id="tableContainer" class="hidden overflow-x-auto">
-                  <table class="w-full">
-                    <thead class="bg-gray-50">
-                      <tr id="tableHeader">
-                        <!-- Headers will be generated dynamically -->
-                      </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                      <!-- Rows will be generated dynamically -->
-                    </tbody>
-                  </table>
-                </div>
-
-                <!-- Empty State -->
-                <div id="emptyState" class="text-center py-12 hidden">
-                  <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
-                  <p class="text-gray-500 text-lg">
-                    No hay docentes registrados
-                  </p>
-                  <button
-                    onclick="openAddModal()"
-                    class="mt-4 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
-                  >
-                    <i class="fas fa-plus mr-2"></i>Agregar Primer Docente
-                  </button>
-                </div>
+                
               </div>
             </div>
 
@@ -940,6 +892,56 @@
               </div>
               <input id="teachersImportInput" type="file" accept=".xlsx,.xls" class="hidden" />
               <div class="text-gray-500">Usa la tabla principal para seleccionar docentes y aplicar acciones; o importa/exporta usando los botones.</div>
+            </div>
+
+            <!-- Search and Filters -->
+            <div class="mb-6">
+              <div class="relative">
+                <input
+                  type="text"
+                  id="searchInput"
+                  placeholder="Buscar por ID, nombre o apellidos..."
+                  onkeyup="filterTable()"
+                  class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <i
+                  class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                ></i>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="text-center py-12">
+              <div class="loading-spinner mx-auto mb-4"></div>
+              <p class="text-gray-500">Cargando datos...</p>
+            </div>
+
+            <!-- Teachers Table -->
+            <div id="tableContainer" class="hidden overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-50">
+                  <tr id="tableHeader">
+                    <!-- Headers will be generated dynamically -->
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <!-- Rows will be generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12 hidden">
+              <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
+              <p class="text-gray-500 text-lg">
+                No hay docentes registrados
+              </p>
+              <button
+                onclick="openAddModal()"
+                class="mt-4 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                <i class="fas fa-plus mr-2"></i>Agregar Primer Docente
+              </button>
             </div>
           </div>
         </div>
@@ -1715,12 +1717,9 @@
             const mapped = mapPagedResponseToModel(resp);
             teachers = mapped.teachers;
             activities = mapped.activities;
-            // reattach subjects
+            // reattach subjects and rebuild filtered view
             teachers.forEach(t => { t.subjects = subjectsById[t.id] || []; });
-            filteredTeachers = applySubjectFilterToList(teachers);
-            buildTable();
-            updateStats();
-            updateCharts();
+            filterTable();
             setLastRefreshNow();
           } catch (e) {
             console.error("Auto-refresh error:", e);
@@ -1863,10 +1862,7 @@
           const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
         });
         if (current && allSubjects.includes(current)) sel.value = current;
-        sel.onchange = () => {
-          filteredTeachers = applySubjectFilterToList(teachers);
-          buildTable(); updateStats(); updateCharts();
-        };
+        sel.onchange = () => { filterTable(); };
       }
       function applySubjectFilterToList(list) {
         const sel = document.getElementById('subjectFilter');
@@ -1913,6 +1909,7 @@
         if (!currentSubjectsTeacherId) return;
         try {
           await api.setTeacherSubjects(currentSubjectsTeacherId, subjectsWorkingList);
+          await initializeApp();
           showNotification('Materias actualizadas', 'success');
           closeSubjectsModal();
         } catch (e) {
@@ -2425,16 +2422,14 @@
 
       // Filter table
       function filterTable() {
-        const searchTerm = document
-          .getElementById("searchInput")
-          .value.toLowerCase();
-        filteredTeachers = teachers.filter(
-          (teacher) =>
-            teacher.id.toLowerCase().includes(searchTerm) ||
-            teacher.name.toLowerCase().includes(searchTerm) ||
-            teacher.lastName.toLowerCase().includes(searchTerm)
+        const term = (document.getElementById('searchInput')?.value || '').toLowerCase();
+        const bySubject = applySubjectFilterToList(teachers);
+        filteredTeachers = bySubject.filter(t =>
+          (String(t.id||'').toLowerCase().includes(term)) ||
+          (String(t.name||'').toLowerCase().includes(term)) ||
+          (String(t.lastName||'').toLowerCase().includes(term))
         );
-        buildTable();
+        buildTable(); updateStats(); updateCharts();
       }
 
       // Modal functions
