@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Control Académico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="api.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#f0f9f0",
+                100: "#dcf2dc",
+                500: "#2E7D32",
+                600: "#1B5E20",
+                700: "#155315",
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      .mobile-menu-open {
+        transform: translateX(0);
+      }
+
+      .mobile-menu-closed {
+        transform: translateX(-100%);
+      }
+
+      .mobile-menu {
+        transition: transform 0.3s ease-in-out;
+      }
+
+      .backdrop {
+        backdrop-filter: blur(8px);
+        background: rgba(0, 0, 0, 0.5);
+      }
+
+      .card-hover {
+        transition: all 0.3s ease;
+      }
+
+      .card-hover:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      }
+
+      .animate-fade-in {
+        animation: fadeIn 0.6s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .progress-bar {
+        transition: width 0.5s ease;
+      }
+
+      .loading-spinner {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #2e7d32;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .chart-type-btn {
+        transition: all 0.3s ease;
+      }
+
+      .chart-type-btn.active {
+        background-color: #2e7d32 !important;
+        color: white !important;
+      }
+
+      .chart-type-btn:not(.active):hover {
+        background-color: #e5e7eb;
+      }
+    </style>
+  </head>
+
+  <body class="bg-gray-50 min-h-screen">
+    <!-- Navigation Header -->
+    <nav
+      class="bg-gradient-to-r from-primary-600 to-primary-500 shadow-lg relative z-50"
+    >
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <!-- Logo and Title -->
+          <div class="flex items-center space-x-4">
+            <div class="bg-white bg-opacity-20 p-2 rounded-lg">
+              <i class="fas fa-graduation-cap text-white text-xl"></i>
+            </div>
+            <div>
+              <h1 class="text-white text-lg font-bold">EduControl Pro</h1>
+              <p class="text-green-100 text-xs">Sistema Académico</p>
+            </div>
+          </div>
+
+          <!-- Desktop Navigation -->
+          <div class="hidden lg:flex items-center space-x-6">
+            <button
+              onclick="showSection('dashboard')"
+              class="nav-btn text-white hover:text-green-200 px-3 py-2 rounded-lg transition-colors active"
+            >
+              <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </button>
+            <button
+              onclick="showSection('teachers')"
+              class="nav-btn text-white hover:text-green-200 px-3 py-2 rounded-lg transition-colors"
+            >
+              <i class="fas fa-users mr-2"></i>Docentes
+            </button>
+            <button
+              onclick="showSection('reports')"
+              class="nav-btn text-white hover:text-green-200 px-3 py-2 rounded-lg transition-colors"
+            >
+              <i class="fas fa-chart-bar mr-2"></i>Reportes
+            </button>
+          </div>
+
+          <!-- Desktop Actions -->
+          <div class="hidden lg:flex items-center space-x-3">
+            <button
+              onclick="openAddModal()"
+              class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-all"
+            >
+              <i class="fas fa-plus mr-2"></i>Nuevo
+            </button>
+            <button
+              onclick="generateReport()"
+              class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-all"
+            >
+              <i class="fas fa-file-pdf mr-2"></i>Reporte
+            </button>
+          </div>
+
+          <!-- Mobile Menu Button -->
+          <div class="lg:hidden">
+            <button
+              id="mobileMenuBtn"
+              onclick="toggleMobileMenu()"
+              class="text-white p-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition-all"
+            >
+              <i class="fas fa-bars text-xl"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mobile Menu Overlay -->
+    <div
+      id="mobileMenuOverlay"
+      class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden"
+    ></div>
+
+    <!-- Mobile Menu -->
+    <div
+      id="mobileMenu"
+      class="mobile-menu mobile-menu-closed fixed top-0 left-0 h-full w-80 bg-white shadow-2xl z-50 lg:hidden"
+    >
+      <div class="p-6">
+        <!-- Mobile Menu Header -->
+        <div class="flex items-center justify-between mb-8">
+          <div class="flex items-center space-x-3">
+            <div class="bg-primary-500 p-2 rounded-lg">
+              <i class="fas fa-graduation-cap text-white"></i>
+            </div>
+            <div>
+              <h2 class="text-gray-900 font-bold">EduControl Pro</h2>
+              <p class="text-gray-500 text-sm">Menú Principal</p>
+            </div>
+          </div>
+          <button
+            onclick="closeMobileMenu()"
+            class="text-gray-400 hover:text-gray-600 p-2"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <!-- Navigation Links -->
+        <div class="space-y-2 mb-8">
+          <h3
+            class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-3"
+          >
+            Navegación
+          </h3>
+          <button
+            onclick="showSection('dashboard'); closeMobileMenu();"
+            class="w-full text-left flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <div class="bg-blue-100 p-2 rounded-lg">
+              <i class="fas fa-tachometer-alt text-blue-600"></i>
+            </div>
+            <div>
+              <span class="text-gray-900 font-medium">Dashboard</span>
+              <p class="text-gray-500 text-sm">Panel principal</p>
+            </div>
+          </button>
+          <button
+            onclick="showSection('teachers'); closeMobileMenu();"
+            class="w-full text-left flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <div class="bg-green-100 p-2 rounded-lg">
+              <i class="fas fa-users text-green-600"></i>
+            </div>
+            <div>
+              <span class="text-gray-900 font-medium">Docentes</span>
+              <p class="text-gray-500 text-sm">Gestión de profesores</p>
+            </div>
+          </button>
+          <button
+            onclick="showSection('reports'); closeMobileMenu();"
+            class="w-full text-left flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <div class="bg-purple-100 p-2 rounded-lg">
+              <i class="fas fa-chart-bar text-purple-600"></i>
+            </div>
+            <div>
+              <span class="text-gray-900 font-medium">Reportes</span>
+              <p class="text-gray-500 text-sm">Análisis y estadísticas</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="space-y-2 mb-8">
+          <h3
+            class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-3"
+          >
+            Acciones Rápidas
+          </h3>
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              onclick="openAddModal(); closeMobileMenu();"
+              class="bg-green-50 hover:bg-green-100 text-green-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
+            >
+              <i class="fas fa-user-plus text-xl"></i>
+              <span class="text-sm font-medium">Nuevo Docente</span>
+            </button>
+            <button
+              onclick="openActivitiesModal(); closeMobileMenu();"
+              class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
+            >
+              <i class="fas fa-tasks text-xl"></i>
+              <span class="text-sm font-medium">Actividades</span>
+            </button>
+            <button
+              onclick="generateReport(); closeMobileMenu();"
+              class="bg-purple-50 hover:bg-purple-100 text-purple-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
+            >
+              <i class="fas fa-file-pdf text-xl"></i>
+              <span class="text-sm font-medium">Generar PDF</span>
+            </button>
+            <button
+              onclick="deleteSelected(); closeMobileMenu();"
+              class="bg-red-50 hover:bg-red-100 text-red-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
+            >
+              <i class="fas fa-trash-alt text-xl"></i>
+              <span class="text-sm font-medium">Eliminar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search -->
+        <div class="space-y-2 mb-8">
+          <h3
+            class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-3"
+          >
+            Búsqueda
+          </h3>
+          <div class="relative">
+            <input
+              type="text"
+              placeholder="Buscar docentes..."
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <i
+              class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            ></i>
+          </div>
+        </div>
+
+        <!-- Stats Summary -->
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h3
+            class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-3"
+          >
+            Resumen
+          </h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="text-center">
+              <div
+                class="text-2xl font-bold text-primary-600"
+                id="mobileStatsTeachers"
+              >
+                0
+              </div>
+              <div class="text-xs text-gray-500">Docentes</div>
+            </div>
+            <div class="text-center">
+              <div
+                class="text-2xl font-bold text-green-600"
+                id="mobileStatsCompleted"
+              >
+                0
+              </div>
+              <div class="text-xs text-gray-500">Completadas</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Dashboard Section -->
+      <div id="dashboardSection" class="section active">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div
+            class="bg-white rounded-xl shadow-lg p-6 card-hover animate-fade-in"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-gray-500 text-sm font-medium">Total Docentes</p>
+                <p class="text-3xl font-bold text-gray-900" id="totalTeachers">
+                  0
+                </p>
+              </div>
+              <div class="bg-blue-100 p-3 rounded-full">
+                <i class="fas fa-users text-blue-600 text-xl"></i>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="text-green-600 text-sm font-medium"
+                >+5% este mes</span
+              >
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-xl shadow-lg p-6 card-hover animate-fade-in"
+            style="animation-delay: 0.1s"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-gray-500 text-sm font-medium">
+                  Actividades Completadas
+                </p>
+                <p
+                  class="text-3xl font-bold text-gray-900"
+                  id="completedActivities"
+                >
+                  0
+                </p>
+              </div>
+              <div class="bg-green-100 p-3 rounded-full">
+                <i class="fas fa-check-circle text-green-600 text-xl"></i>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="text-green-600 text-sm font-medium"
+                >Excelente progreso</span
+              >
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-xl shadow-lg p-6 card-hover animate-fade-in"
+            style="animation-delay: 0.2s"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-gray-500 text-sm font-medium">
+                  Promedio Completitud
+                </p>
+                <p
+                  class="text-3xl font-bold text-gray-900"
+                  id="averageCompletion"
+                >
+                  0%
+                </p>
+              </div>
+              <div class="bg-yellow-100 p-3 rounded-full">
+                <i class="fas fa-percentage text-yellow-600 text-xl"></i>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="text-yellow-600 text-sm font-medium"
+                >En progreso</span
+              >
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-xl shadow-lg p-6 card-hover animate-fade-in"
+            style="animation-delay: 0.3s"
+          >
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-gray-500 text-sm font-medium">
+                  Actividades Pendientes
+                </p>
+                <p
+                  class="text-3xl font-bold text-gray-900"
+                  id="pendingActivities"
+                >
+                  0
+                </p>
+              </div>
+              <div class="bg-red-100 p-3 rounded-full">
+                <i class="fas fa-clock text-red-600 text-xl"></i>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="text-red-600 text-sm font-medium"
+                >Requiere atención</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Dashboard Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Teachers Table -->
+          <div class="lg:col-span-2">
+            <div
+              class="bg-white rounded-xl shadow-lg p-6 animate-fade-in"
+              style="animation-delay: 0.4s"
+            >
+              <div
+                class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0"
+              >
+                <div>
+                  <h2 class="text-2xl font-bold text-gray-900">
+                    Gestión de Docentes
+                  </h2>
+                  <p class="text-gray-600">
+                    Administra el seguimiento académico
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    onclick="openAddModal()"
+                    class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <i class="fas fa-plus mr-2"></i>Nuevo
+                  </button>
+                  <button
+                    onclick="openActivitiesModal()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <i class="fas fa-tasks mr-2"></i>Actividades
+                  </button>
+                  <button
+                    onclick="deleteSelected()"
+                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <i class="fas fa-trash mr-2"></i>Eliminar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Search and Filters -->
+              <div class="mb-6">
+                <div class="relative">
+                  <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Buscar por ID, nombre o apellidos..."
+                    onkeyup="filterTable()"
+                    class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                  <i
+                    class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  ></i>
+                </div>
+              </div>
+
+              <!-- Loading State -->
+              <div id="loadingState" class="text-center py-12">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-gray-500">Cargando datos...</p>
+              </div>
+
+              <!-- Teachers Table -->
+              <div id="tableContainer" class="hidden overflow-x-auto">
+                <table class="w-full">
+                  <thead class="bg-gray-50">
+                    <tr id="tableHeader">
+                      <!-- Headers will be generated dynamically -->
+                    </tr>
+                  </thead>
+                  <tbody id="tableBody">
+                    <!-- Rows will be generated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Empty State -->
+              <div id="emptyState" class="text-center py-12 hidden">
+                <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
+                <p class="text-gray-500 text-lg">No hay docentes registrados</p>
+                <button
+                  onclick="openAddModal()"
+                  class="mt-4 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  <i class="fas fa-plus mr-2"></i>Agregar Primer Docente
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="lg:col-span-1">
+            <div
+              class="bg-white rounded-xl shadow-lg p-6 animate-fade-in"
+              style="animation-delay: 0.5s"
+            >
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-bold text-gray-900">
+                  Estadísticas de Progreso
+                </h3>
+                <div class="flex space-x-2">
+                  <button
+                    onclick="showChartType('individual')"
+                    id="individualBtn"
+                    class="chart-type-btn active px-3 py-1 text-sm rounded-lg bg-primary-500 text-white"
+                  >
+                    Individual
+                  </button>
+                  <button
+                    onclick="showChartType('general')"
+                    id="generalBtn"
+                    class="chart-type-btn px-3 py-1 text-sm rounded-lg bg-gray-200 text-gray-700"
+                  >
+                    General
+                  </button>
+                </div>
+              </div>
+
+              <div id="chartsContainer">
+                <div id="noChartsMessage" class="text-center py-8">
+                  <i class="fas fa-chart-pie text-gray-300 text-4xl mb-4"></i>
+                  <p class="text-gray-500">
+                    No hay datos suficientes para mostrar gráficos
+                  </p>
+                </div>
+
+                <!-- Individual Charts Container -->
+                <div id="individualChartsContainer" class="space-y-6">
+                  <!-- Individual teacher charts will be generated here -->
+                </div>
+
+                <!-- General Chart Container -->
+                <div id="generalChartContainer" class="hidden">
+                  <div class="mb-4">
+                    <h4 class="text-lg font-semibold text-gray-800 mb-2">
+                      Progreso General del Sistema
+                    </h4>
+                    <p class="text-sm text-gray-600">
+                      Distribución de completitud de actividades
+                    </p>
+                  </div>
+                  <div class="flex justify-center">
+                    <canvas
+                      id="generalProgressChart"
+                      width="300"
+                      height="300"
+                    ></canvas>
+                  </div>
+                  <div
+                    id="generalStats"
+                    class="mt-4 grid grid-cols-2 gap-4 text-center"
+                  >
+                    <!-- General statistics will be populated here -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Teachers Section -->
+      <div id="teachersSection" class="section hidden">
+        <div class="bg-white rounded-xl shadow-lg p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-3xl font-bold text-gray-900">
+                Gestión de Docentes
+              </h2>
+              <p class="text-gray-600 mt-2">
+                Vista completa de todos los docentes
+              </p>
+            </div>
+            <button
+              onclick="showSection('dashboard')"
+              class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
+            </button>
+          </div>
+          <div class="text-center py-16">
+            <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
+            <p class="text-xl text-gray-500">Sección de Docentes</p>
+            <p class="text-gray-400">
+              Aquí puedes ver y gestionar todos los docentes del sistema
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports Section -->
+      <div id="reportsSection" class="section hidden">
+        <div class="bg-white rounded-xl shadow-lg p-8">
+          <div class="flex items-center justify-between mb-8">
+            <div>
+              <h2 class="text-3xl font-bold text-gray-900">
+                Reportes y Análisis
+              </h2>
+              <p class="text-gray-600 mt-2">
+                Informes detallados y estadísticas
+              </p>
+            </div>
+            <button
+              onclick="showSection('dashboard')"
+              class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+              class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200"
+            >
+              <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-blue-500 p-2 rounded-lg">
+                  <i class="fas fa-file-pdf text-white"></i>
+                </div>
+                <h3 class="text-lg font-bold text-blue-800">Reporte General</h3>
+              </div>
+              <p class="text-blue-600 text-sm mb-4">
+                Resumen completo de todos los docentes y actividades
+              </p>
+              <button
+                onclick="generateReport()"
+                class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Generar PDF
+              </button>
+            </div>
+
+            <div
+              class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200"
+            >
+              <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-green-500 p-2 rounded-lg">
+                  <i class="fas fa-chart-line text-white"></i>
+                </div>
+                <h3 class="text-lg font-bold text-green-800">
+                  Análisis de Progreso
+                </h3>
+              </div>
+              <p class="text-green-600 text-sm mb-4">
+                Estadísticas detalladas de completitud por actividad
+              </p>
+              <button
+                class="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Ver Análisis
+              </button>
+            </div>
+
+            <div
+              class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200"
+            >
+              <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-purple-500 p-2 rounded-lg">
+                  <i class="fas fa-calendar-alt text-white"></i>
+                </div>
+                <h3 class="text-lg font-bold text-purple-800">
+                  Reporte Mensual
+                </h3>
+              </div>
+              <p class="text-purple-600 text-sm mb-4">
+                Resumen de actividades del mes actual
+              </p>
+              <button
+                class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Generar Mensual
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Teacher Modal -->
+    <div
+      id="addModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4"
+    >
+      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-gray-900">Nuevo Docente</h3>
+          <button
+            onclick="closeAddModal()"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <form id="addTeacherForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2"
+              >ID del Docente</label
+            >
+            <input
+              type="text"
+              id="newTeacherId"
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: DOC001"
+            />
+            <div id="idError" class="text-red-600 text-sm mt-1 hidden"></div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2"
+              >Nombre</label
+            >
+            <input
+              type="text"
+              id="newTeacherName"
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Nombre del docente"
+            />
+            <div id="nameError" class="text-red-600 text-sm mt-1 hidden"></div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2"
+              >Apellidos</label
+            >
+            <input
+              type="text"
+              id="newTeacherLastName"
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Apellidos del docente"
+            />
+            <div
+              id="lastNameError"
+              class="text-red-600 text-sm mt-1 hidden"
+            ></div>
+          </div>
+
+          <div class="flex gap-3 pt-4">
+            <button
+              type="button"
+              onclick="closeAddModal()"
+              class="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onclick="addNewTeacher()"
+              class="flex-1 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Activities Modal -->
+    <div
+      id="activitiesModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4"
+    >
+      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-gray-900">Gestionar Actividades</h3>
+          <button
+            onclick="closeActivitiesModal()"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <div class="max-h-60 overflow-y-auto mb-6">
+          <div id="activitiesList" class="space-y-2">
+            <!-- Activities will be populated here -->
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2"
+            >Agregar Nueva Actividad:</label
+          >
+          <div class="flex gap-3">
+            <input
+              type="text"
+              id="newActivityName"
+              placeholder="Nombre de la nueva actividad"
+              class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <button
+              onclick="addActivity()"
+              class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              <i class="fas fa-plus mr-2"></i>Agregar
+            </button>
+          </div>
+          <div
+            id="activityError"
+            class="text-red-600 text-sm mt-1 hidden"
+          ></div>
+        </div>
+
+        <div class="flex gap-3 pt-6">
+          <button
+            onclick="closeActivitiesModal()"
+            class="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+          >
+            Cerrar
+          </button>
+          <button
+            onclick="saveActivities()"
+            class="flex-1 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
+          >
+            Guardar Cambios
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div
+      id="notificationContainer"
+      class="fixed top-4 right-4 z-50 space-y-2"
+    ></div>
+
+    <script>
+      // Global variables
+      let teachers = [
+        {
+          id: "DOC001",
+          name: "Ana",
+          lastName: "García López",
+          activities: {
+            "Planificación de clases": true,
+            "Evaluación de estudiantes": true,
+            "Reuniones de padres": false,
+            "Capacitación docente": true,
+            "Elaboración de materiales": false,
+          },
+        },
+        {
+          id: "DOC002",
+          name: "Carlos",
+          lastName: "Rodríguez Martín",
+          activities: {
+            "Planificación de clases": true,
+            "Evaluación de estudiantes": false,
+            "Reuniones de padres": true,
+            "Capacitación docente": false,
+            "Elaboración de materiales": true,
+          },
+        },
+        {
+          id: "DOC003",
+          name: "María",
+          lastName: "Fernández Silva",
+          activities: {
+            "Planificación de clases": true,
+            "Evaluación de estudiantes": true,
+            "Reuniones de padres": true,
+            "Capacitación docente": true,
+            "Elaboración de materiales": true,
+          },
+        },
+      ];
+
+      let activities = [
+        "Planificación de clases",
+        "Evaluación de estudiantes",
+        "Reuniones de padres",
+        "Capacitación docente",
+        "Elaboración de materiales",
+      ];
+
+      let filteredTeachers = [...teachers];
+      let currentEditIndex = -1;
+
+      // Mobile Menu Functions
+      function toggleMobileMenu() {
+        const mobileMenu = document.getElementById("mobileMenu");
+        const overlay = document.getElementById("mobileMenuOverlay");
+        const menuBtn = document.getElementById("mobileMenuBtn");
+        const icon = menuBtn.querySelector("i");
+
+        if (mobileMenu.classList.contains("mobile-menu-closed")) {
+          // Open menu
+          mobileMenu.classList.remove("mobile-menu-closed");
+          mobileMenu.classList.add("mobile-menu-open");
+          overlay.classList.remove("hidden");
+          icon.classList.remove("fa-bars");
+          icon.classList.add("fa-times");
+          document.body.style.overflow = "hidden";
+
+          // Add click listener to overlay
+          overlay.addEventListener("click", closeMobileMenu);
+        } else {
+          closeMobileMenu();
+        }
+      }
+
+      function closeMobileMenu() {
+        const mobileMenu = document.getElementById("mobileMenu");
+        const overlay = document.getElementById("mobileMenuOverlay");
+        const menuBtn = document.getElementById("mobileMenuBtn");
+        const icon = menuBtn.querySelector("i");
+
+        mobileMenu.classList.remove("mobile-menu-open");
+        mobileMenu.classList.add("mobile-menu-closed");
+        overlay.classList.add("hidden");
+        icon.classList.remove("fa-times");
+        icon.classList.add("fa-bars");
+        document.body.style.overflow = "auto";
+
+        // Remove click listener from overlay
+        overlay.removeEventListener("click", closeMobileMenu);
+      }
+
+      // Navigation Functions
+      function showSection(sectionName) {
+        // Hide all sections
+        document.querySelectorAll(".section").forEach((section) => {
+          section.classList.add("hidden");
+          section.classList.remove("active");
+        });
+
+        // Show selected section
+        const targetSection = document.getElementById(sectionName + "Section");
+        if (targetSection) {
+          targetSection.classList.remove("hidden");
+          targetSection.classList.add("active");
+        }
+
+        // Update navigation buttons
+        document.querySelectorAll(".nav-btn").forEach((btn) => {
+          btn.classList.remove("active", "bg-white", "bg-opacity-20");
+        });
+
+        // Add active class to current button
+        const activeBtn = document.querySelector(
+          `[onclick="showSection('${sectionName}')"]`
+        );
+        if (activeBtn && activeBtn.classList.contains("nav-btn")) {
+          activeBtn.classList.add("active", "bg-white", "bg-opacity-20");
+        }
+      }
+
+      // Initialize the application
+      async function initializeApp() {
+        try {
+          const resp = await api.getPagedData(1, 1000);
+          const mapped = mapPagedResponseToModel(resp);
+          teachers = mapped.teachers;
+          activities = mapped.activities;
+          filteredTeachers = [...teachers];
+
+          document.getElementById("loadingState").classList.add("hidden");
+          if (teachers.length === 0) {
+            document.getElementById("emptyState").classList.remove("hidden");
+          } else {
+            document
+              .getElementById("tableContainer")
+              .classList.remove("hidden");
+            buildTable();
+          }
+          updateStats();
+          updateCharts();
+        } catch (err) {
+          console.error("Error cargando datos:", err);
+          document.getElementById("loadingState").classList.add("hidden");
+          document.getElementById("emptyState").classList.remove("hidden");
+        }
+      }
+
+      // Build the teachers table
+      function buildTable() {
+        const tableHeader = document.getElementById("tableHeader");
+        const tableBody = document.getElementById("tableBody");
+
+        // Clear existing content
+        tableHeader.innerHTML = "";
+        tableBody.innerHTML = "";
+
+        // Build header
+        const headers = [
+          "Sel.",
+          "ID",
+          "Nombre",
+          "Apellidos",
+          ...activities,
+          "Progreso",
+          "Acciones",
+        ];
+        headers.forEach((header, index) => {
+          const th = document.createElement("th");
+          th.className =
+            "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
+
+          if (index === 0) {
+            // Select all checkbox
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.id = "selectAll";
+            checkbox.className =
+              "rounded border-gray-300 text-primary-600 focus:ring-primary-500";
+            checkbox.addEventListener("change", function (e) {
+              document.querySelectorAll(".select-row").forEach((cb) => {
+                cb.checked = e.target.checked;
+              });
+            });
+            th.appendChild(checkbox);
+          } else {
+            th.textContent = header;
+          }
+
+          tableHeader.appendChild(th);
+        });
+
+        // Build body
+        filteredTeachers.forEach((teacher, index) => {
+          const row = document.createElement("tr");
+          row.className = "hover:bg-gray-50 transition-colors";
+
+          // Selection checkbox
+          const selectCell = document.createElement("td");
+          selectCell.className = "px-6 py-4 whitespace-nowrap";
+          const selectCheckbox = document.createElement("input");
+          selectCheckbox.type = "checkbox";
+          selectCheckbox.className =
+            "select-row rounded border-gray-300 text-primary-600 focus:ring-primary-500";
+          selectCheckbox.dataset.index = index;
+          selectCell.appendChild(selectCheckbox);
+          row.appendChild(selectCell);
+
+          // ID cell
+          const idCell = document.createElement("td");
+          idCell.className =
+            "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900";
+          idCell.textContent = teacher.id;
+          row.appendChild(idCell);
+
+          // Name cell
+          const nameCell = document.createElement("td");
+          nameCell.className =
+            "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
+          nameCell.textContent = teacher.name;
+          row.appendChild(nameCell);
+
+          // Last name cell
+          const lastNameCell = document.createElement("td");
+          lastNameCell.className =
+            "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
+          lastNameCell.textContent = teacher.lastName;
+          row.appendChild(lastNameCell);
+
+          // Activity checkboxes
+          let completedCount = 0;
+          activities.forEach((activity) => {
+            const activityCell = document.createElement("td");
+            activityCell.className = "px-6 py-4 whitespace-nowrap text-center";
+            const activityCheckbox = document.createElement("input");
+            activityCheckbox.type = "checkbox";
+            activityCheckbox.className =
+              "rounded border-gray-300 text-primary-600 focus:ring-primary-500";
+            activityCheckbox.checked = teacher.activities[activity] || false;
+            if (activityCheckbox.checked) completedCount++;
+
+            activityCheckbox.addEventListener("change", async function () {
+              teacher.activities[activity] = this.checked;
+              try {
+                const colIndex = activities.indexOf(activity);
+                if (teacher.originalIndex !== undefined && colIndex >= 0) {
+                  await api.updateCheckboxState(teacher.originalIndex, colIndex, this.checked);
+                }
+              } catch (e) {
+                console.error("Error actualizando checkbox:", e);
+              }
+              updateStats();
+              updateCharts();
+              // Update progress cell
+              const newCompletedCount = activities.filter(
+                (act) => teacher.activities[act]
+              ).length;
+              const progressPercent = (
+                (newCompletedCount / activities.length) *
+                100
+              ).toFixed(1);
+              const progressCell = row.querySelector(".progress-cell");
+              progressCell.innerHTML = `
+                            <div class="flex items-center">
+                                <span class="text-sm font-medium text-gray-900 mr-2">${progressPercent}%</span>
+                                <div class="w-16 bg-gray-200 rounded-full h-2">
+                                    <div class="bg-primary-500 h-2 rounded-full progress-bar" style="width: ${progressPercent}%"></div>
+                                </div>
+                            </div>
+                        `;
+            });
+
+            activityCell.appendChild(activityCheckbox);
+            row.appendChild(activityCell);
+          });
+
+          // Progress cell
+          const progressCell = document.createElement("td");
+          progressCell.className = "px-6 py-4 whitespace-nowrap progress-cell";
+          const progressPercent = (
+            (completedCount / activities.length) *
+            100
+          ).toFixed(1);
+          progressCell.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-sm font-medium text-gray-900 mr-2">${progressPercent}%</span>
+                        <div class="w-16 bg-gray-200 rounded-full h-2">
+                            <div class="bg-primary-500 h-2 rounded-full progress-bar" style="width: ${progressPercent}%"></div>
+                        </div>
+                    </div>
+                `;
+          row.appendChild(progressCell);
+
+          // Actions cell
+          const actionsCell = document.createElement("td");
+          actionsCell.className =
+            "px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2";
+
+          const editBtn = document.createElement("button");
+          editBtn.className =
+            "text-blue-600 hover:text-blue-900 transition-colors";
+          editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+          editBtn.title = "Editar";
+          editBtn.onclick = () => editTeacher(index);
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className =
+            "text-red-600 hover:text-red-900 transition-colors";
+          deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+          deleteBtn.title = "Eliminar";
+          deleteBtn.onclick = () => deleteTeacher(index);
+
+          actionsCell.appendChild(editBtn);
+          actionsCell.appendChild(deleteBtn);
+          row.appendChild(actionsCell);
+
+          tableBody.appendChild(row);
+        });
+      }
+
+      // Update statistics
+      function updateStats() {
+        const totalTeachersCount = teachers.length;
+        let totalCompletedActivities = 0;
+        let totalPossibleActivities = 0;
+
+        teachers.forEach((teacher) => {
+          activities.forEach((activity) => {
+            if (teacher.activities[activity]) {
+              totalCompletedActivities++;
+            }
+            totalPossibleActivities++;
+          });
+        });
+
+        const averageCompletion =
+          totalPossibleActivities > 0
+            ? (
+                (totalCompletedActivities / totalPossibleActivities) *
+                100
+              ).toFixed(1)
+            : 0;
+        const pendingActivities =
+          totalPossibleActivities - totalCompletedActivities;
+
+        // Update main stats
+        document.getElementById("totalTeachers").textContent =
+          totalTeachersCount;
+        document.getElementById("completedActivities").textContent =
+          totalCompletedActivities;
+        document.getElementById("averageCompletion").textContent =
+          averageCompletion + "%";
+        document.getElementById("pendingActivities").textContent =
+          pendingActivities;
+
+        // Update mobile stats
+        document.getElementById("mobileStatsTeachers").textContent =
+          totalTeachersCount;
+        document.getElementById("mobileStatsCompleted").textContent =
+          totalCompletedActivities;
+      }
+
+      let currentChartType = "individual";
+      let individualCharts = [];
+      let generalChart = null;
+
+      // Update charts based on activity completion
+      function updateCharts() {
+        const noChartsMessage = document.getElementById("noChartsMessage");
+
+        if (teachers.length === 0 || activities.length === 0) {
+          noChartsMessage.classList.remove("hidden");
+          document
+            .getElementById("individualChartsContainer")
+            .classList.add("hidden");
+          document
+            .getElementById("generalChartContainer")
+            .classList.add("hidden");
+          return;
+        }
+
+        noChartsMessage.classList.add("hidden");
+
+        if (currentChartType === "individual") {
+          updateIndividualCharts();
+        } else {
+          updateGeneralChart();
+        }
+      }
+
+      // Show chart type (individual or general)
+      function showChartType(type) {
+        currentChartType = type;
+
+        // Update button states
+        document.querySelectorAll(".chart-type-btn").forEach((btn) => {
+          btn.classList.remove("active", "bg-primary-500", "text-white");
+          btn.classList.add("bg-gray-200", "text-gray-700");
+        });
+
+        const activeBtn = document.getElementById(type + "Btn");
+        activeBtn.classList.add("active", "bg-primary-500", "text-white");
+        activeBtn.classList.remove("bg-gray-200", "text-gray-700");
+
+        // Show/hide containers
+        if (type === "individual") {
+          document
+            .getElementById("individualChartsContainer")
+            .classList.remove("hidden");
+          document
+            .getElementById("generalChartContainer")
+            .classList.add("hidden");
+          updateIndividualCharts();
+        } else {
+          document
+            .getElementById("individualChartsContainer")
+            .classList.add("hidden");
+          document
+            .getElementById("generalChartContainer")
+            .classList.remove("hidden");
+          updateGeneralChart();
+        }
+      }
+
+      // Update individual teacher charts
+      function updateIndividualCharts() {
+        const container = document.getElementById("individualChartsContainer");
+        container.innerHTML = "";
+
+        // Destroy existing charts
+        individualCharts.forEach((chart) => {
+          if (chart) chart.destroy();
+        });
+        individualCharts = [];
+
+        teachers.forEach((teacher, index) => {
+          const completedCount = activities.filter(
+            (activity) => teacher.activities[activity]
+          ).length;
+          const pendingCount = activities.length - completedCount;
+          const progressPercent =
+            activities.length > 0
+              ? ((completedCount / activities.length) * 100).toFixed(1)
+              : 0;
+
+          const chartDiv = document.createElement("div");
+          chartDiv.className = "bg-gray-50 rounded-lg p-4 border";
+          chartDiv.innerHTML = `
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-800">${teacher.name} ${teacher.lastName}</h4>
+                            <p class="text-xs text-gray-600">${teacher.id}</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold text-primary-600">${progressPercent}%</div>
+                            <div class="text-xs text-gray-500">${completedCount}/${activities.length}</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-center">
+                        <canvas id="individualChart_${index}" width="120" height="120"></canvas>
+                    </div>
+                `;
+          container.appendChild(chartDiv);
+
+          // Create individual chart
+          const ctx = document
+            .getElementById(`individualChart_${index}`)
+            .getContext("2d");
+          const chart = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels: ["Completadas", "Pendientes"],
+              datasets: [
+                {
+                  data: [completedCount, pendingCount],
+                  backgroundColor: ["#2E7D32", "#E5E7EB"],
+                  borderWidth: 2,
+                  borderColor: "#ffffff",
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: "60%",
+              plugins: {
+                legend: {
+                  display: false,
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function (context) {
+                      const label = context.label || "";
+                      const value = context.parsed;
+                      const total = context.dataset.data.reduce(
+                        (a, b) => a + b,
+                        0
+                      );
+                      const percentage =
+                        total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                      return `${label}: ${value} (${percentage}%)`;
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          individualCharts.push(chart);
+        });
+      }
+
+      // Update general progress chart
+      function updateGeneralChart() {
+        const container = document.getElementById("generalChartContainer");
+        const statsContainer = document.getElementById("generalStats");
+
+        // Destroy existing chart
+        if (generalChart) {
+          generalChart.destroy();
+        }
+
+        // Calculate general statistics
+        let totalActivities = 0;
+        let completedActivities = 0;
+        let teachersWithFullCompletion = 0;
+        let teachersWithPartialCompletion = 0;
+        let teachersWithNoCompletion = 0;
+
+        teachers.forEach((teacher) => {
+          const completed = activities.filter(
+            (activity) => teacher.activities[activity]
+          ).length;
+          totalActivities += activities.length;
+          completedActivities += completed;
+
+          if (completed === activities.length) {
+            teachersWithFullCompletion++;
+          } else if (completed > 0) {
+            teachersWithPartialCompletion++;
+          } else {
+            teachersWithNoCompletion++;
+          }
+        });
+
+        const overallProgress =
+          totalActivities > 0
+            ? ((completedActivities / totalActivities) * 100).toFixed(1)
+            : 0;
+
+        // Update statistics display
+        statsContainer.innerHTML = `
+                <div class="bg-green-50 p-3 rounded-lg">
+                    <div class="text-2xl font-bold text-green-600">${teachersWithFullCompletion}</div>
+                    <div class="text-xs text-green-700">Completitud Total</div>
+                </div>
+                <div class="bg-yellow-50 p-3 rounded-lg">
+                    <div class="text-2xl font-bold text-yellow-600">${teachersWithPartialCompletion}</div>
+                    <div class="text-xs text-yellow-700">Completitud Parcial</div>
+                </div>
+                <div class="bg-red-50 p-3 rounded-lg">
+                    <div class="text-2xl font-bold text-red-600">${teachersWithNoCompletion}</div>
+                    <div class="text-xs text-red-700">Sin Completar</div>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <div class="text-2xl font-bold text-blue-600">${overallProgress}%</div>
+                    <div class="text-xs text-blue-700">Progreso General</div>
+                </div>
+            `;
+
+        // Create general chart
+        const ctx = document
+          .getElementById("generalProgressChart")
+          .getContext("2d");
+        generalChart = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: [
+              "Completitud Total",
+              "Completitud Parcial",
+              "Sin Completar",
+            ],
+            datasets: [
+              {
+                data: [
+                  teachersWithFullCompletion,
+                  teachersWithPartialCompletion,
+                  teachersWithNoCompletion,
+                ],
+                backgroundColor: ["#2E7D32", "#F59E0B", "#EF4444"],
+                borderWidth: 3,
+                borderColor: "#ffffff",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "50%",
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: {
+                  padding: 20,
+                  usePointStyle: true,
+                  font: {
+                    size: 12,
+                  },
+                },
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    const label = context.label || "";
+                    const value = context.parsed;
+                    const total = context.dataset.data.reduce(
+                      (a, b) => a + b,
+                      0
+                    );
+                    const percentage =
+                      total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                    return `${label}: ${value} docentes (${percentage}%)`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      // Filter table
+      function filterTable() {
+        const searchTerm = document
+          .getElementById("searchInput")
+          .value.toLowerCase();
+        filteredTeachers = teachers.filter(
+          (teacher) =>
+            teacher.id.toLowerCase().includes(searchTerm) ||
+            teacher.name.toLowerCase().includes(searchTerm) ||
+            teacher.lastName.toLowerCase().includes(searchTerm)
+        );
+        buildTable();
+      }
+
+      // Modal functions
+      function openAddModal() {
+        document.getElementById("newTeacherId").value = "";
+        document.getElementById("newTeacherName").value = "";
+        document.getElementById("newTeacherLastName").value = "";
+        clearErrors();
+        document.getElementById("addModal").classList.remove("hidden");
+        document.getElementById("addModal").classList.add("flex");
+      }
+
+      function closeAddModal() {
+        document.getElementById("addModal").classList.add("hidden");
+        document.getElementById("addModal").classList.remove("flex");
+      }
+
+      function openActivitiesModal() {
+        renderActivitiesList();
+        document.getElementById("activitiesModal").classList.remove("hidden");
+        document.getElementById("activitiesModal").classList.add("flex");
+      }
+
+      function closeActivitiesModal() {
+        document.getElementById("activitiesModal").classList.add("hidden");
+        document.getElementById("activitiesModal").classList.remove("flex");
+      }
+
+      function clearErrors() {
+        document.getElementById("idError").classList.add("hidden");
+        document.getElementById("nameError").classList.add("hidden");
+        document.getElementById("lastNameError").classList.add("hidden");
+        document.getElementById("activityError").classList.add("hidden");
+      }
+
+      // Add new teacher
+      function addNewTeacher() {
+        const id = document.getElementById("newTeacherId").value.trim();
+        const name = document.getElementById("newTeacherName").value.trim();
+        const lastName = document
+          .getElementById("newTeacherLastName")
+          .value.trim();
+
+        clearErrors();
+
+        let hasErrors = false;
+
+        if (!id) {
+          document.getElementById("idError").textContent = "El ID es requerido";
+          document.getElementById("idError").classList.remove("hidden");
+          hasErrors = true;
+        } else if (teachers.some((t) => t.id === id)) {
+          document.getElementById("idError").textContent = "Este ID ya existe";
+          document.getElementById("idError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (!name) {
+          document.getElementById("nameError").textContent =
+            "El nombre es requerido";
+          document.getElementById("nameError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (!lastName) {
+          document.getElementById("lastNameError").textContent =
+            "Los apellidos son requeridos";
+          document.getElementById("lastNameError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (hasErrors) return;
+
+        // Create new teacher with all activities set to false
+        const newTeacher = {
+          id: id,
+          name: name,
+          lastName: lastName,
+          activities: {},
+        };
+
+        activities.forEach((activity) => {
+          newTeacher.activities[activity] = false;
+        });
+
+        teachers.push(newTeacher);
+        filteredTeachers = [...teachers];
+
+        closeAddModal();
+
+        // Update UI
+        if (
+          document.getElementById("emptyState").classList.contains("hidden") ===
+          false
+        ) {
+          document.getElementById("emptyState").classList.add("hidden");
+          document.getElementById("tableContainer").classList.remove("hidden");
+        }
+
+        buildTable();
+        updateStats();
+        updateCharts();
+        showNotification("Docente agregado exitosamente", "success");
+      }
+
+      // Edit teacher
+      function editTeacher(index) {
+        currentEditIndex = index;
+        const teacher = filteredTeachers[index];
+
+        document.getElementById("newTeacherId").value = teacher.id;
+        document.getElementById("newTeacherName").value = teacher.name;
+        document.getElementById("newTeacherLastName").value = teacher.lastName;
+
+        // Change modal title and button
+        document.querySelector("#addModal h3").textContent = "Editar Docente";
+        document.querySelector(
+          '#addModal button[onclick="addNewTeacher()"]'
+        ).textContent = "Actualizar";
+        document
+          .querySelector('#addModal button[onclick="addNewTeacher()"]')
+          .setAttribute("onclick", "updateTeacher()");
+
+        openAddModal();
+      }
+
+      // Update teacher
+      function updateTeacher() {
+        const id = document.getElementById("newTeacherId").value.trim();
+        const name = document.getElementById("newTeacherName").value.trim();
+        const lastName = document
+          .getElementById("newTeacherLastName")
+          .value.trim();
+
+        clearErrors();
+
+        let hasErrors = false;
+
+        if (!id) {
+          document.getElementById("idError").textContent = "El ID es requerido";
+          document.getElementById("idError").classList.remove("hidden");
+          hasErrors = true;
+        } else if (
+          teachers.some(
+            (t, i) =>
+              t.id === id &&
+              i !== teachers.indexOf(filteredTeachers[currentEditIndex])
+          )
+        ) {
+          document.getElementById("idError").textContent = "Este ID ya existe";
+          document.getElementById("idError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (!name) {
+          document.getElementById("nameError").textContent =
+            "El nombre es requerido";
+          document.getElementById("nameError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (!lastName) {
+          document.getElementById("lastNameError").textContent =
+            "Los apellidos son requeridos";
+          document.getElementById("lastNameError").classList.remove("hidden");
+          hasErrors = true;
+        }
+
+        if (hasErrors) return;
+
+        // Update teacher
+        const teacherIndex = teachers.indexOf(
+          filteredTeachers[currentEditIndex]
+        );
+        teachers[teacherIndex].id = id;
+        teachers[teacherIndex].name = name;
+        teachers[teacherIndex].lastName = lastName;
+
+        filteredTeachers = [...teachers];
+
+        closeAddModal();
+        resetAddModal();
+        buildTable();
+        updateStats();
+        showNotification("Docente actualizado exitosamente", "success");
+      }
+
+      // Reset add modal
+      function resetAddModal() {
+        document.querySelector("#addModal h3").textContent = "Nuevo Docente";
+        document.querySelector(
+          '#addModal button[onclick="updateTeacher()"]'
+        ).textContent = "Guardar";
+        document
+          .querySelector('#addModal button[onclick="updateTeacher()"]')
+          .setAttribute("onclick", "addNewTeacher()");
+        currentEditIndex = -1;
+      }
+
+      // Delete teacher
+      function deleteTeacher(index) {
+        if (confirm("¿Estás seguro de que deseas eliminar este docente?")) {
+          const teacherIndex = teachers.indexOf(filteredTeachers[index]);
+          teachers.splice(teacherIndex, 1);
+          filteredTeachers = [...teachers];
+
+          if (teachers.length === 0) {
+            document.getElementById("tableContainer").classList.add("hidden");
+            document.getElementById("emptyState").classList.remove("hidden");
+          } else {
+            buildTable();
+          }
+
+          updateStats();
+          updateCharts();
+          showNotification("Docente eliminado exitosamente", "success");
+        }
+      }
+
+      // Delete selected teachers
+      function deleteSelected() {
+        const selectedCheckboxes = document.querySelectorAll(
+          ".select-row:checked"
+        );
+        if (selectedCheckboxes.length === 0) {
+          showNotification(
+            "Por favor, selecciona al menos un docente",
+            "error"
+          );
+          return;
+        }
+
+        if (
+          confirm(
+            `¿Estás seguro de que deseas eliminar ${selectedCheckboxes.length} docente(s)?`
+          )
+        ) {
+          const indicesToDelete = Array.from(selectedCheckboxes).map((cb) =>
+            parseInt(cb.dataset.index)
+          );
+
+          // Sort indices in descending order to avoid index shifting issues
+          indicesToDelete.sort((a, b) => b - a);
+
+          indicesToDelete.forEach((index) => {
+            const teacherIndex = teachers.indexOf(filteredTeachers[index]);
+            teachers.splice(teacherIndex, 1);
+          });
+
+          filteredTeachers = [...teachers];
+
+          if (teachers.length === 0) {
+            document.getElementById("tableContainer").classList.add("hidden");
+            document.getElementById("emptyState").classList.remove("hidden");
+          } else {
+            buildTable();
+          }
+
+          updateStats();
+          updateCharts();
+          showNotification(
+            `${indicesToDelete.length} docente(s) eliminado(s) exitosamente`,
+            "success"
+          );
+        }
+      }
+
+      // Activities management
+      function renderActivitiesList() {
+        const activitiesList = document.getElementById("activitiesList");
+        activitiesList.innerHTML = activities
+          .map(
+            (activity, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span class="text-gray-900">${activity}</span>
+                    <button onclick="removeActivity(${index})" class="text-red-600 hover:text-red-800 transition-colors">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `
+          )
+          .join("");
+      }
+
+      function addActivity() {
+        const activityName = document
+          .getElementById("newActivityName")
+          .value.trim();
+        document.getElementById("activityError").classList.add("hidden");
+
+        if (!activityName) {
+          document.getElementById("activityError").textContent =
+            "El nombre de la actividad es requerido";
+          document.getElementById("activityError").classList.remove("hidden");
+          return;
+        }
+
+        if (activities.includes(activityName)) {
+          document.getElementById("activityError").textContent =
+            "Esta actividad ya existe";
+          document.getElementById("activityError").classList.remove("hidden");
+          return;
+        }
+
+        activities.push(activityName);
+        document.getElementById("newActivityName").value = "";
+        renderActivitiesList();
+      }
+
+      function removeActivity(index) {
+        if (confirm("¿Estás seguro de que deseas eliminar esta actividad?")) {
+          const activityName = activities[index];
+          activities.splice(index, 1);
+
+          // Remove activity from all teachers
+          teachers.forEach((teacher) => {
+            delete teacher.activities[activityName];
+          });
+
+          renderActivitiesList();
+        }
+      }
+
+      function saveActivities() {
+        closeActivitiesModal();
+        buildTable();
+        updateStats();
+        updateCharts();
+        showNotification("Actividades actualizadas exitosamente", "success");
+      }
+
+      // Generate PDF report
+      function generateReport() {
+        if (teachers.length === 0) {
+          showNotification("No hay datos para generar el reporte", "error");
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: "landscape" });
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor("#2E7D32");
+        doc.text("Reporte de Control Académico", 14, 22);
+
+        doc.setFontSize(12);
+        doc.setTextColor("#000000");
+        doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
+        doc.text(`Total de Docentes: ${teachers.length}`, 14, 45);
+
+        // Table data
+        const tableData = teachers.map((teacher) => {
+          const completedCount = activities.filter(
+            (activity) => teacher.activities[activity]
+          ).length;
+          const progress =
+            activities.length > 0
+              ? ((completedCount / activities.length) * 100).toFixed(1) + "%"
+              : "N/A";
+
+          return [
+            teacher.id,
+            teacher.name,
+            teacher.lastName,
+            ...activities.map((activity) =>
+              teacher.activities[activity] ? "Sí" : "No"
+            ),
+            progress,
+          ];
+        });
+
+        doc.autoTable({
+          startY: 55,
+          head: [["ID", "Nombre", "Apellidos", ...activities, "Progreso"]],
+          body: tableData,
+          theme: "grid",
+          headStyles: {
+            fillColor: "#2E7D32",
+            textColor: "#FFFFFF",
+            fontStyle: "bold",
+          },
+          alternateRowStyles: {
+            fillColor: "#f9f9f9",
+          },
+          styles: {
+            fontSize: 8,
+            cellPadding: 3,
+          },
+        });
+
+        doc.save(
+          `reporte-academico-${new Date().toISOString().slice(0, 10)}.pdf`
+        );
+        showNotification("Reporte PDF generado exitosamente", "success");
+      }
+
+      // Show notification
+      function showNotification(message, type = "success") {
+        const container = document.getElementById("notificationContainer");
+        const notification = document.createElement("div");
+
+        const bgColor = type === "success" ? "bg-green-500" : "bg-red-500";
+        const icon =
+          type === "success" ? "fa-check-circle" : "fa-exclamation-circle";
+
+        notification.className = `${bgColor} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 transform transition-all duration-300 translate-x-full`;
+        notification.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+
+        container.appendChild(notification);
+
+        // Animate in
+        setTimeout(() => {
+          notification.classList.remove("translate-x-full");
+        }, 100);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+          if (notification.parentElement) {
+            notification.classList.add("translate-x-full");
+            setTimeout(() => {
+              if (notification.parentElement) {
+                notification.remove();
+              }
+            }, 300);
+          }
+        }, 5000);
+      }
+
+      // Initialize app when page loads
+      window.addEventListener("load", initializeApp);
+
+      // Close mobile menu when clicking outside
+      document.addEventListener("click", function (event) {
+        const mobileMenu = document.getElementById("mobileMenu");
+        const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+
+        if (
+          !mobileMenu.contains(event.target) &&
+          !mobileMenuBtn.contains(event.target)
+        ) {
+          if (mobileMenu.classList.contains("mobile-menu-open")) {
+            closeMobileMenu();
+          }
+        }
+      });
+
+      // Close modals when clicking outside
+      document.addEventListener("click", function (event) {
+        const addModal = document.getElementById("addModal");
+        const activitiesModal = document.getElementById("activitiesModal");
+
+        if (event.target === addModal) {
+          closeAddModal();
+          resetAddModal();
+        }
+
+        if (event.target === activitiesModal) {
+          closeActivitiesModal();
+        }
+      });
+    </script>
+    <script>
+      (function () {
+        function c() {
+          var b = a.contentDocument || a.contentWindow.document;
+          if (b) {
+            var d = b.createElement("script");
+            d.innerHTML =
+              "window.__CF$cv$params={r:'97baab6e86022b85',t:'MTc1NzI5NDkxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+            b.getElementsByTagName("head")[0].appendChild(d);
+          }
+        }
+        if (document.body) {
+          var a = document.createElement("iframe");
+          a.height = 1;
+          a.width = 1;
+          a.style.position = "absolute";
+          a.style.top = 0;
+          a.style.left = 0;
+          a.style.border = "none";
+          a.style.visibility = "hidden";
+          document.body.appendChild(a);
+          if ("loading" !== document.readyState) c();
+          else if (window.addEventListener)
+            document.addEventListener("DOMContentLoaded", c);
+          else {
+            var e = document.onreadystatechange || function () {};
+            document.onreadystatechange = function (b) {
+              e(b);
+              "loading" !== document.readyState &&
+                ((document.onreadystatechange = e), c());
+            };
+          }
+        }
+  })();
+    </script>
+    <script>
+      // CRUD overrides to connect with Apps Script
+      async function addNewTeacher() {
+        const id = document.getElementById("newTeacherId").value.trim();
+        const name = document.getElementById("newTeacherName").value.trim();
+        const lastName = document.getElementById("newTeacherLastName").value.trim();
+        clearErrors && clearErrors();
+        if (!id || !name || !lastName) return;
+        try {
+          const r = await api.addOrUpdateTeacher(id, name, lastName);
+          if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          closeAddModal && closeAddModal();
+          await initializeApp();
+        } catch (e) { console.error(e); }
+      }
+
+      async function updateTeacher() {
+        const id = document.getElementById("newTeacherId").value.trim();
+        const name = document.getElementById("newTeacherName").value.trim();
+        const lastName = document.getElementById("newTeacherLastName").value.trim();
+        try {
+          const teacher = filteredTeachers[currentEditIndex];
+          const originalIndex = teacher && teacher.originalIndex;
+          const r = await api.updateTeacherData(originalIndex, id, name, lastName);
+          if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          closeAddModal && closeAddModal();
+          resetAddModal && resetAddModal();
+          await initializeApp();
+        } catch (e) { console.error(e); }
+      }
+
+      async function deleteTeacher(index) {
+        if (!confirm("¿Estás seguro de que deseas eliminar este docente?")) return;
+        try {
+          const t = filteredTeachers[index];
+          const r = await api.deleteMultipleTeachers([t.originalIndex]);
+          if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          await initializeApp();
+        } catch (e) { console.error(e); }
+      }
+
+      async function deleteSelected() {
+        const selected = document.querySelectorAll(".select-row:checked");
+        if (selected.length === 0) return;
+        if (!confirm(`¿Estás seguro de eliminar ${selected.length} docente(s)?`)) return;
+        try {
+          const indices = Array.from(selected).map((cb) => parseInt(cb.dataset.index));
+          const originalIndices = indices.map((i) => filteredTeachers[i].originalIndex);
+          const r = await api.deleteMultipleTeachers(originalIndices);
+          if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          await initializeApp();
+        } catch (e) { console.error(e); }
+      }
+
+      async function saveActivities() {
+        try {
+          const r = await api.updateActivityHeaders(activities);
+          if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          closeActivitiesModal && closeActivitiesModal();
+          await initializeApp();
+        } catch (e) { console.error(e); }
+      }
+
+      async function generateReport() {
+        try {
+          const resp = await api.getAllTeachersForReport();
+          const headers = (resp.headers || []).slice();
+          const activityHeaders = headers.slice(4);
+          const rows = (resp.teachers || []).map((t) => {
+            const progressCount = activityHeaders.reduce((acc, h) => acc + (t[h] ? 1 : 0), 0);
+            const progress = activityHeaders.length > 0 ? ((progressCount / activityHeaders.length) * 100).toFixed(1) + "%" : "N/A";
+            return [t.id, t.name, t.lastName, ...activityHeaders.map((h) => (t[h] ? "Sí" : "No")), progress];
+          });
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: "landscape" });
+          doc.setFontSize(18); doc.setTextColor("#2E7D32");
+          doc.text("Reporte de Control Académico", 14, 22);
+          doc.setFontSize(12); doc.setTextColor("#000000");
+          doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
+          doc.text(`Total de Docentes: ${rows.length}`, 14, 45);
+          doc.autoTable({ startY: 55, head: [["ID","Nombre","Apellidos",...activityHeaders,"Progreso"]], body: rows, theme: "grid", headStyles: { fillColor: "#2E7D32", textColor: "#FFFFFF", fontStyle: "bold" }, alternateRowStyles: { fillColor: "#f9f9f9" }, styles: { fontSize: 8, cellPadding: 3 } });
+          doc.save(`reporte-academico-${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch (e) { console.error(e); }
+      }
+    </script>
+  </body>
+</html>
