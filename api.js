@@ -87,6 +87,14 @@ const api = {
     gasRequest("deleteMultipleTeachers", { originalIndices }),
   updateActivityHeaders: (headers) =>
     gasRequest("updateActivityHeaders", { headers }),
+  // Subjects (Materias)
+  getTeacherSubjects: (id) => gasRequest("getTeacherSubjects", { id }),
+  setTeacherSubjects: (id, subjects) =>
+    gasRequest("setTeacherSubjects", { id, subjects }),
+  listAllSubjects: () => gasRequest("listAllSubjects", {}),
+  // Bulk ops for import
+  bulkAddOrUpdateTeachers: (rows) => gasRequest("bulkAddOrUpdateTeachers", { rows }),
+  bulkSetSubjects: (items) => gasRequest("bulkSetSubjects", { items }),
 };
 
 // Utility to map Apps Script teacher rows to UI model

@@ -10,6 +10,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -412,19 +413,6 @@
 
             <!-- Desktop Actions -->
             <div class="hidden lg:flex items-center space-x-3">
-              <div class="flex items-center space-x-3 mr-4">
-                <div class="bg-white bg-opacity-20 rounded-full p-2">
-                  <i class="fas fa-user text-white"></i>
-                </div>
-                <div class="text-white">
-                  <p class="text-sm font-medium" id="userNameDisplay">
-                    Usuario
-                  </p>
-                  <p class="text-xs text-green-100" id="userEmailDisplay">
-                    usuario@institucion.edu
-                  </p>
-                </div>
-              </div>
               <button
                 onclick="openAddModal()"
                 class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-all"
@@ -443,6 +431,15 @@
               >
                 <i class="fas fa-sign-out-alt mr-2"></i>Salir
               </button>
+              <div class="flex items-center space-x-3 ml-4">
+                <div class="bg-white bg-opacity-20 rounded-full p-2">
+                  <i class="fas fa-user text-white"></i>
+                </div>
+                <div class="text-white text-right">
+                  <p class="text-sm font-medium" id="userNameDisplay">Usuario</p>
+                  <p class="text-xs text-green-100" id="userEmailDisplay">usuario@institucion.edu</p>
+                </div>
+              </div>
             </div>
 
             <!-- Mobile Menu Button -->
@@ -923,12 +920,26 @@
                 <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
               </button>
             </div>
-            <div class="text-center py-16">
-              <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
-              <p class="text-xl text-gray-500">Sección de Docentes</p>
-              <p class="text-gray-400">
-                Aquí puedes ver y gestionar todos los docentes del sistema
-              </p>
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-wrap items-center gap-3">
+                <button onclick="openImportDialog()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg border">
+                  <i class="fas fa-file-import mr-2"></i>Importar Excel
+                </button>
+                <button onclick="exportTeachersToExcel()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg border">
+                  <i class="fas fa-file-export mr-2"></i>Exportar Excel
+                </button>
+                <button onclick="openSubjectsModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+                  <i class="fas fa-book mr-2"></i>Perfil de Materias
+                </button>
+                <div class="ml-auto flex items-center gap-2">
+                  <label for="subjectFilter" class="text-gray-600 text-sm">Materia:</label>
+                  <select id="subjectFilter" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                    <option value="">Todas</option>
+                  </select>
+                </div>
+              </div>
+              <input id="teachersImportInput" type="file" accept=".xlsx,.xls" class="hidden" />
+              <div class="text-gray-500">Usa la tabla principal para seleccionar docentes y aplicar acciones; o importa/exporta usando los botones.</div>
             </div>
           </div>
         </div>
@@ -1168,6 +1179,39 @@
             >
               Guardar Cambios
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subjects Modal -->
+      <div
+        id="subjectsModal"
+        class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4"
+      >
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-900">
+              Materias de <span id="subjectsTeacherLabel" class="text-primary-600"></span>
+            </h3>
+            <button onclick="closeSubjectsModal()" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="mb-4 text-sm text-gray-600">
+            <span class="font-medium">ID:</span> <span id="subjectsTeacherId"></span>
+          </div>
+          <div class="max-h-60 overflow-y-auto mb-4">
+            <ul id="subjectsList" class="space-y-2"></ul>
+          </div>
+          <div class="flex gap-3">
+            <input type="text" id="newSubjectInput" placeholder="Nueva materia" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            <button onclick="addSubjectToList()" class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+              <i class="fas fa-plus mr-2"></i>Agregar
+            </button>
+          </div>
+          <div class="flex gap-3 pt-6">
+            <button onclick="closeSubjectsModal()" class="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">Cerrar</button>
+            <button onclick="saveSubjectsForCurrentTeacher()" class="flex-1 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors">Guardar</button>
           </div>
         </div>
       </div>
@@ -1470,6 +1514,8 @@
       ];
 
       let filteredTeachers = [...teachers];
+      let subjectsById = {}; // { [id]: string[] }
+      let allSubjects = [];
       let currentEditIndex = -1;
 
       // Mobile Menu Functions
@@ -1548,6 +1594,20 @@
           const mapped = mapPagedResponseToModel(resp);
           teachers = mapped.teachers;
           activities = mapped.activities;
+          // Load subjects for all teachers and attach
+          try {
+            const s = await api.listAllSubjects();
+            const items = (s && s.items) || [];
+            subjectsById = {};
+            const set = new Set();
+            items.forEach(it => {
+              const id = it && it.id; const arr = Array.isArray(it && it.subjects) ? it.subjects : [];
+              subjectsById[id] = arr;
+              arr.forEach(x => set.add(x));
+            });
+            allSubjects = Array.from(set).sort();
+          } catch (e) { subjectsById = {}; allSubjects = []; }
+          teachers.forEach(t => { t.subjects = subjectsById[t.id] || []; });
           filteredTeachers = [...teachers];
 
           document.getElementById("loadingState").classList.add("hidden");
@@ -1561,6 +1621,7 @@
           }
           updateStats();
           updateCharts();
+          ensureSubjectFilterUI();
         } catch (err) {
           console.error("Error cargando datos:", err);
           document.getElementById("loadingState").classList.add("hidden");
@@ -1654,7 +1715,9 @@
             const mapped = mapPagedResponseToModel(resp);
             teachers = mapped.teachers;
             activities = mapped.activities;
-            filteredTeachers = [...teachers];
+            // reattach subjects
+            teachers.forEach(t => { t.subjects = subjectsById[t.id] || []; });
+            filteredTeachers = applySubjectFilterToList(teachers);
             buildTable();
             updateStats();
             updateCharts();
@@ -1676,6 +1739,188 @@
         }
       }
 
+      // ===== Excel Import/Export & Subjects (Teachers Section) =====
+      function openImportDialog() {
+        const input = document.getElementById('teachersImportInput');
+        if (!input) return;
+        input.value = '';
+        input.onchange = handleTeachersImport;
+        input.click();
+      }
+
+      async function handleTeachersImport(evt) {
+        try {
+          const file = evt.target.files && evt.target.files[0];
+          if (!file) return;
+          const data = await file.arrayBuffer();
+          const wb = XLSX.read(data, { type: 'array' });
+          const docentesSheet = wb.Sheets['Docentes'] || wb.Sheets[wb.SheetNames[0]];
+          const docentes = XLSX.utils.sheet_to_json(docentesSheet, { defval: '' });
+          // Expect columns: ID, Nombre, Apellidos
+          const rows = [];
+          docentes.forEach(r => {
+            const id = String(r.ID || r.Id || r.id || '').trim();
+            const name = String(r.Nombre || r.name || r['Nombre(s)'] || r.NombreDocente || r['Nombre Docente'] || r.Name || '').trim();
+            const lastName = String(r.Apellidos || r['Apellidos Docente'] || r.lastName || r.Apellido || '').trim();
+            if (id && name && lastName) rows.push({ id, name, lastName });
+          });
+          if (rows.length > 0) {
+            await api.bulkAddOrUpdateTeachers(rows);
+          }
+          // Subjects from sheet "Materias" (optional)
+          const materiasSheet = wb.Sheets['Materias'];
+          if (materiasSheet) {
+            const materiasRows = XLSX.utils.sheet_to_json(materiasSheet, { defval: '' });
+            // Support two formats: (ID, Materias) comma-separated OR (ID, Materia) per row
+            const map = {};
+            materiasRows.forEach(r => {
+              const id = String(r.ID || r.Id || r.id || '').trim();
+              if (!id) return;
+              if (r.Materias) {
+                const arr = String(r.Materias).split(',').map(s=>s.trim()).filter(Boolean);
+                map[id] = (map[id]||[]).concat(arr);
+              } else if (r.Materia) {
+                const s = String(r.Materia).trim();
+                if (s) map[id] = (map[id]||[]).concat([s]);
+              }
+            });
+            const items = Object.keys(map).map(id => ({ id, subjects: Array.from(new Set(map[id])) }));
+            if (items.length > 0) await api.bulkSetSubjects(items);
+          }
+          await initializeApp();
+          showNotification('Importación completada', 'success');
+        } catch (e) {
+          console.error(e);
+          showNotification('Error al importar Excel', 'error');
+        }
+      }
+
+      async function exportTeachersToExcel() {
+        try {
+          const resp = await api.getAllTeachersForReport();
+          const headers = (resp.headers || []).slice();
+          const rows = (resp.teachers || []).map(t => {
+            const o = { ID: t.id, Nombre: t.name, Apellidos: t.lastName };
+            headers.slice(4).forEach(h => { o[h] = t[h] ? 'Sí' : 'No'; });
+            return o;
+          });
+          const ws1 = XLSX.utils.json_to_sheet(rows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws1, 'Docentes');
+          // Subjects sheet
+          try {
+            const sub = await api.listAllSubjects();
+            const items = (sub && sub.items) || [];
+            const flat = [];
+            items.forEach(it => {
+              const id = it.id; const arr = Array.isArray(it.subjects)?it.subjects:[];
+              if (arr.length === 0) flat.push({ ID: id, Materias: '' });
+              else flat.push({ ID: id, Materias: arr.join(', ') });
+            });
+            const ws2 = XLSX.utils.json_to_sheet(flat);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Materias');
+          } catch (e) { /* ignore subjects sheet errors */ }
+          XLSX.writeFile(wb, `docentes-${new Date().toISOString().slice(0,10)}.xlsx`);
+        } catch (e) {
+          console.error(e);
+          showNotification('Error al exportar Excel', 'error');
+        }
+      }
+
+      function openSubjectsModal() {
+        const id = prompt('Ingresa el ID del docente para editar materias:');
+        if (!id) return;
+        editSubjectsForTeacher(id.trim());
+      }
+
+      async function editSubjectsForTeacher(teacherId) {
+        try {
+          currentSubjectsTeacherId = teacherId;
+          const teacher = (teachers || []).find(t => t.id === teacherId);
+          const name = teacher ? `${teacher.name} ${teacher.lastName}` : '';
+          document.getElementById('subjectsTeacherLabel').textContent = name || '';
+          document.getElementById('subjectsTeacherId').textContent = teacherId;
+          const res = await api.getTeacherSubjects(teacherId);
+          subjectsWorkingList = Array.isArray(res && res.subjects) ? res.subjects.slice() : [];
+          renderSubjectsList();
+          openSubjectsModalPanel();
+        } catch (e) {
+          console.error(e);
+          showNotification('No se pudo cargar el perfil de materias', 'error');
+        }
+      }
+
+      // ===== Subject filter UI =====
+      function ensureSubjectFilterUI() {
+        const sel = document.getElementById('subjectFilter');
+        if (!sel) return;
+        const current = sel.value;
+        // rebuild options
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = ''; optAll.textContent = 'Todas'; sel.appendChild(optAll);
+        (allSubjects || []).forEach(s => {
+          const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+        });
+        if (current && allSubjects.includes(current)) sel.value = current;
+        sel.onchange = () => {
+          filteredTeachers = applySubjectFilterToList(teachers);
+          buildTable(); updateStats(); updateCharts();
+        };
+      }
+      function applySubjectFilterToList(list) {
+        const sel = document.getElementById('subjectFilter');
+        const v = sel ? sel.value : '';
+        if (!v) return [...list];
+        return list.filter(t => Array.isArray(t.subjects) && t.subjects.includes(v));
+      }
+
+      let currentSubjectsTeacherId = null;
+      let subjectsWorkingList = [];
+
+      function openSubjectsModalPanel() {
+        const m = document.getElementById('subjectsModal');
+        m.classList.remove('hidden'); m.classList.add('flex');
+      }
+      function closeSubjectsModal() {
+        const m = document.getElementById('subjectsModal');
+        m.classList.add('hidden'); m.classList.remove('flex');
+        currentSubjectsTeacherId = null; subjectsWorkingList = [];
+      }
+      function renderSubjectsList() {
+        const ul = document.getElementById('subjectsList');
+        ul.innerHTML = '';
+        subjectsWorkingList.forEach((s, i) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between bg-gray-50 border rounded px-3 py-2';
+          li.innerHTML = `<span class="text-gray-800">${s}</span>`;
+          const btn = document.createElement('button');
+          btn.className = 'text-red-600 hover:text-red-800';
+          btn.innerHTML = '<i class="fas fa-times"></i>';
+          btn.onclick = () => { subjectsWorkingList.splice(i,1); renderSubjectsList(); };
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+      }
+      function addSubjectToList() {
+        const inp = document.getElementById('newSubjectInput');
+        const v = (inp.value||'').trim();
+        if (!v) return;
+        if (!subjectsWorkingList.includes(v)) subjectsWorkingList.push(v);
+        inp.value=''; renderSubjectsList();
+      }
+      async function saveSubjectsForCurrentTeacher() {
+        if (!currentSubjectsTeacherId) return;
+        try {
+          await api.setTeacherSubjects(currentSubjectsTeacherId, subjectsWorkingList);
+          showNotification('Materias actualizadas', 'success');
+          closeSubjectsModal();
+        } catch (e) {
+          console.error(e);
+          showNotification('No se pudieron actualizar las materias', 'error');
+        }
+      }
+
       // Build the teachers table
       function buildTable() {
         const tableHeader = document.getElementById("tableHeader");
@@ -1691,6 +1936,7 @@
           "ID",
           "Nombre",
           "Apellidos",
+          "Materias",
           ...activities,
           "Progreso",
           "Acciones",
@@ -1756,6 +2002,13 @@
             "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
           lastNameCell.textContent = teacher.lastName;
           row.appendChild(lastNameCell);
+
+          // Subjects (read-only)
+          const subjectsCell = document.createElement("td");
+          subjectsCell.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-700";
+          const subs = Array.isArray(teacher.subjects) ? teacher.subjects : [];
+          subjectsCell.textContent = subs.length ? subs.join(", ") : "-";
+          row.appendChild(subjectsCell);
 
           // Activity checkboxes
           let completedCount = 0;
@@ -1845,8 +2098,15 @@
           deleteBtn.title = "Eliminar";
           deleteBtn.onclick = () => deleteTeacher(index);
 
+          const subjectsBtn = document.createElement("button");
+          subjectsBtn.className = "text-indigo-600 hover:text-indigo-900 transition-colors";
+          subjectsBtn.innerHTML = '<i class="fas fa-book"></i>';
+          subjectsBtn.title = "Materias";
+          subjectsBtn.onclick = () => editSubjectsForTeacher(teacher.id);
+
           actionsCell.appendChild(editBtn);
           actionsCell.appendChild(deleteBtn);
+          actionsCell.appendChild(subjectsBtn);
           row.appendChild(actionsCell);
 
           tableBody.appendChild(row);
@@ -2664,6 +2924,7 @@
       document.addEventListener("click", function (event) {
         const addModal = document.getElementById("addModal");
         const activitiesModal = document.getElementById("activitiesModal");
+        const subjectsModal = document.getElementById("subjectsModal");
 
         if (event.target === addModal) {
           closeAddModal();
@@ -2672,6 +2933,9 @@
 
         if (event.target === activitiesModal) {
           closeActivitiesModal();
+        }
+        if (event.target === subjectsModal) {
+          closeSubjectsModal();
         }
       });
     </script>
@@ -2770,3 +3034,4 @@
     </script>
   </body>
 </html>
+
