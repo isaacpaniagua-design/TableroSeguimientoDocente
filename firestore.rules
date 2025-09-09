@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Colección de verificación opcional: cerrada por defecto
+    match /health_check/{document=**} {
+      allow read: if false;   // Pon 'true' si quieres lectura pública del health check
+      allow write: if false;
+    }
+
+    // Resto del contenido: solo usuarios de @potros.itson.edu.mx con email verificado
+    match /{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@potros\\.itson\\.edu\\.mx$');
+    }
+  }
+}
