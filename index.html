@@ -1,43 +1,4 @@
-      // Render read-only activities preview on Dashboard
-      function renderActivitiesPreview() {
-        try {
-          const container = document.getElementById('activitiesPreview');
-          if (!container) return;
-          container.innerHTML = '';
-          if (!Array.isArray(teachers) || !Array.isArray(activities) || teachers.length === 0 || activities.length === 0) {
-            container.innerHTML = '<p class="text-sm text-gray-500">Sin datos para mostrar.</p>';
-            return;
-          }
-          const MAX_ROWS = 12; // limit to avoid very long page
-          const list = filteredTeachers && filteredTeachers.length ? filteredTeachers : teachers;
-          const rows = list.slice(0, MAX_ROWS);
-          rows.forEach(t => {
-            const row = document.createElement('div');
-            row.className = 'p-4 rounded-lg border bg-gray-50';
-            const title = document.createElement('div');
-            title.className = 'flex items-center justify-between mb-3';
-            title.innerHTML = <div><div class="text-sm font-semibold text-gray-800"> </div><div class="text-xs text-gray-600"></div></div>;
-            const chips = document.createElement('div');
-            chips.className = 'flex flex-wrap gap-2';
-            activities.forEach(a => {
-              const ok = !!(t.activities && t.activities[a]);
-              const chip = document.createElement('span');
-              chip.className = 'px-2 py-1 rounded text-xs ' + (ok ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200');
-              chip.textContent = ${a}: ;
-              chips.appendChild(chip);
-            });
-            row.appendChild(title);
-            row.appendChild(chips);
-            container.appendChild(row);
-          });
-          if (list.length > MAX_ROWS) {
-            const note = document.createElement('div');
-            note.className = 'text-xs text-gray-500';
-            note.textContent = Mostrando  de  docentes.;
-            container.appendChild(note);
-          }
-        } catch (e) { console.warn('preview render error', e); }
-      }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -675,7 +636,47 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-bold text-gray-900">Vista de Actividades (solo lectura)</h3>
               <span class="text-xs text-gray-500">Estado por docente y actividad</span>
-            </div>
+            </div>    <script>
+      function renderActivitiesPreview() {
+        try {
+          const container = document.getElementById('activitiesPreview');
+          if (!container) return;
+          container.innerHTML = '';
+          if (!Array.isArray(teachers) || !Array.isArray(activities) || teachers.length === 0 || activities.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">Sin datos para mostrar.</p>';
+            return;
+          }
+          const MAX_ROWS = 12; // limit to avoid very long page
+          const list = (typeof filteredTeachers !== 'undefined' && filteredTeachers && filteredTeachers.length) ? filteredTeachers : teachers;
+          const rows = list.slice(0, MAX_ROWS);
+          rows.forEach(t => {
+            const row = document.createElement('div');
+            row.className = 'p-4 rounded-lg border bg-gray-50';
+            const title = document.createElement('div');
+            title.className = 'flex items-center justify-between mb-3';
+            title.innerHTML = <div><div class=\"text-sm font-semibold text-gray-800\"> </div><div class=\"text-xs text-gray-600\"></div></div>;
+            const chips = document.createElement('div');
+            chips.className = 'flex flex-wrap gap-2';
+            activities.forEach(a => {
+              const ok = !!(t.activities && t.activities[a]);
+              const chip = document.createElement('span');
+              chip.className = 'px-2 py-1 rounded text-xs ' + (ok ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200');
+              chip.textContent = ${a}: ;
+              chips.appendChild(chip);
+            });
+            row.appendChild(title);
+            row.appendChild(chips);
+            container.appendChild(row);
+          });
+          if (list.length > MAX_ROWS) {
+            const note = document.createElement('div');
+            note.className = 'text-xs text-gray-500';
+            note.textContent = Mostrando  de  docentes.;
+            container.appendChild(note);
+          }
+        } catch (e) { console.warn('preview render error', e); }
+      }
+    </script>
             <div id="activitiesPreview" class="space-y-4"></div>
           </div>
         </div>
@@ -2140,7 +2141,9 @@
                 showNotification("No se pudo guardar el cambio", "error");
               } finally { hideLoading(); }
               updateStats();
-              updateCharts();\n              renderActivitiesPreview();\n              // Update progress cell
+              updateCharts();
+              renderActivitiesPreview();
+              // Update progress cell
               const newCompletedCount = activities.filter(
                 (act) => teacher.activities[act]
               ).length;
@@ -3135,6 +3138,9 @@
     </script>
   </body>
 </html>
+
+
+
 
 
 
