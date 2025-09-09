@@ -1,3 +1,9 @@
+var __AUTH_ID_TOKEN = null;
+try {
+  const saved = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('ID_TOKEN');
+  if (saved) __AUTH_ID_TOKEN = saved;
+} catch (e) {}
+
 // Optional: persist an auth token in sessionStorage (used by UI helpers)
 function setAuthToken(idToken) {
   __AUTH_ID_TOKEN = idToken || null;
@@ -31,29 +37,7 @@ function emitChange(op, detail) {
 }
 
 
-// Utility to map Apps Script teacher rows to UI model
-function mapPagedResponseToModel(resp) {
-  if (!resp || !resp.success) return { teachers: [], activities: [] };
-  const headers = Array.isArray(resp.headers) ? resp.headers : [];
-  const activities = headers.slice(4);
-  const teachers = (resp.teachers || []).map((t) => {
-    const activitiesObj = {};
-    activities.forEach((a) => {
-      activitiesObj[a] = !!t[a];
-    });
-    return {
-      id: t.id,
-      name: t.name,
-      lastName: t.lastName,
-      activities: activitiesObj,
-      originalIndex: t.originalIndex,
-    };
-  });
-  return { teachers, activities };
-}
-
-// expose globally
-window.api = api;
+// expose helper
 window.setAuthToken = setAuthToken;
 
 // ---- Firebase integration ----

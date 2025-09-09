@@ -2055,7 +2055,7 @@
           if (isAuthError(err)) {
             notifySessionExpired();
           } else {
-            showNotification("Error al cargar datos de Sheets", "error");
+            showNotification("Error al cargar datos", "error");
           }
         } finally { hideLoading(); }
       }
@@ -3381,7 +3381,7 @@
       });
     </script>
     <script>
-      // Overrides to ensure backend operations hit Google Sheets
+      // Overrides to ensure backend operations hit Firestore
       function logout() {
         if (confirm("¿Está seguro de que desea cerrar sesión?")) {
           // Clear user data
