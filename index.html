@@ -1,4 +1,43 @@
-<!DOCTYPE html>
+      // Render read-only activities preview on Dashboard
+      function renderActivitiesPreview() {
+        try {
+          const container = document.getElementById('activitiesPreview');
+          if (!container) return;
+          container.innerHTML = '';
+          if (!Array.isArray(teachers) || !Array.isArray(activities) || teachers.length === 0 || activities.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">Sin datos para mostrar.</p>';
+            return;
+          }
+          const MAX_ROWS = 12; // limit to avoid very long page
+          const list = filteredTeachers && filteredTeachers.length ? filteredTeachers : teachers;
+          const rows = list.slice(0, MAX_ROWS);
+          rows.forEach(t => {
+            const row = document.createElement('div');
+            row.className = 'p-4 rounded-lg border bg-gray-50';
+            const title = document.createElement('div');
+            title.className = 'flex items-center justify-between mb-3';
+            title.innerHTML = <div><div class="text-sm font-semibold text-gray-800"> </div><div class="text-xs text-gray-600"></div></div>;
+            const chips = document.createElement('div');
+            chips.className = 'flex flex-wrap gap-2';
+            activities.forEach(a => {
+              const ok = !!(t.activities && t.activities[a]);
+              const chip = document.createElement('span');
+              chip.className = 'px-2 py-1 rounded text-xs ' + (ok ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200');
+              chip.textContent = ${a}: ;
+              chips.appendChild(chip);
+            });
+            row.appendChild(title);
+            row.appendChild(chips);
+            container.appendChild(row);
+          });
+          if (list.length > MAX_ROWS) {
+            const note = document.createElement('div');
+            note.className = 'text-xs text-gray-500';
+            note.textContent = Mostrando  de  docentes.;
+            container.appendChild(note);
+          }
+        } catch (e) { console.warn('preview render error', e); }
+      }<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -629,6 +668,17 @@
             </div>
           </div>
         </div>
+
+        <!-- Activities Preview (read-only) -->
+        <div class="mt-8">
+          <div class="bg-white rounded-xl shadow-lg p-6 animate-fade-in" style="animation-delay: 0.6s">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xl font-bold text-gray-900">Vista de Actividades (solo lectura)</h3>
+              <span class="text-xs text-gray-500">Estado por docente y actividad</span>
+            </div>
+            <div id="activitiesPreview" class="space-y-4"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Main Content -->
@@ -784,7 +834,7 @@
             <!-- Charts (centered below main content) -->
             <div class="lg:col-span-3">
               <div
-                class="bg-white rounded-xl shadow-lg p-6 animate-fade-in max-w-2xl mx-auto"
+                class="bg-white rounded-xl shadow-lg p-6 animate-fade-in"
                 style="animation-delay: 0.5s"
               >
                 <div class="flex items-center justify-between mb-6">
@@ -832,9 +882,7 @@
                         Distribución de completitud de actividades
                       </p>
                     </div>
-                  <div class="w-full">
-                    <canvas id="generalProgressChart" class="w-full" style="height: 320px;"></canvas>
-                  </div>
+                  <div class="w-full"><canvas id="generalProgressChart" class="w-full" style="height: 360px;"></canvas></div>
                     <div
                       id="generalStats"
                       class="mt-4 grid grid-cols-2 gap-4 text-center"
@@ -2092,8 +2140,7 @@
                 showNotification("No se pudo guardar el cambio", "error");
               } finally { hideLoading(); }
               updateStats();
-              updateCharts();
-              // Update progress cell
+              updateCharts();\n              renderActivitiesPreview();\n              // Update progress cell
               const newCompletedCount = activities.filter(
                 (act) => teacher.activities[act]
               ).length;
@@ -2305,9 +2352,7 @@
                             <div class="text-xs text-gray-500">${completedCount}/${activities.length}</div>
                         </div>
                     </div>
-                    <div class="flex justify-center">
-                        <canvas id="individualChart_${index}" width="120" height="120"></canvas>
-                    </div>
+                    <div class="w-full"><canvas id="individualChart_${index}" class="w-full" style="height: 120px;"></canvas></div>
                 `;
           container.appendChild(chartDiv);
 
@@ -3090,4 +3135,14 @@
     </script>
   </body>
 </html>
+
+
+
+
+
+
+
+
+
+
 
