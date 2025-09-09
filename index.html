@@ -832,13 +832,9 @@
                         Distribución de completitud de actividades
                       </p>
                     </div>
-                    <div class="flex justify-center">
-                      <canvas
-                        id="generalProgressChart"
-                        width="300"
-                        height="300"
-                      ></canvas>
-                    </div>
+                  <div class="w-full">
+                    <canvas id="generalProgressChart" class="w-full" style="height: 320px;"></canvas>
+                  </div>
                     <div
                       id="generalStats"
                       class="mt-4 grid grid-cols-2 gap-4 text-center"
@@ -864,20 +860,26 @@
                   Vista completa de todos los docentes
                 </p>
               </div>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  onclick="deleteSelected()"
-                  class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <i class="fas fa-trash mr-2"></i>Eliminar seleccionados
-                </button>
-                <button
-                  onclick="showSection('dashboard')"
-                  class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition-colors"
-                >
-                  <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
-                </button>
-              </div>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="openAddModal()" class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors">
+                <i class="fas fa-plus mr-2"></i>Nuevo
+              </button>
+              <button onclick="openActivitiesModal()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+                <i class="fas fa-tasks mr-2"></i>Actividades
+              </button>
+              <button
+                onclick="deleteSelected()"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <i class="fas fa-trash mr-2"></i>Eliminar seleccionados
+              </button>
+              <button
+                onclick="showSection('dashboard')"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-colors"
+              >
+                <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
+              </button>
+            </div>
             </div>
             <div class="flex flex-col gap-6">
               <div class="flex flex-wrap items-center gap-3">
