@@ -496,7 +496,9 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <!-- Teachers Table -->
           <div class="lg:col-span-2">
+            <div id="teachersCardAnchor"></div>
             <div
+              id="teachersCard"
               class="bg-white rounded-xl shadow-lg p-6 animate-fade-in"
               style="animation-delay: 0.4s"
             >
@@ -676,14 +678,8 @@
               </button>
             </div>
           </div>
-          <div class="text-center py-16">
-            <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
-            <p class="text-xl text-gray-500">Sección de Docentes</p>
-            <p class="text-gray-400">
-              Aquí puedes ver y gestionar todos los docentes del sistema
-            </p>
+          <div id="teachersCardHost"></div><!-- moved table here -->
           </div>
-        </div>
       </div>
 
       <!-- Reports Section -->
@@ -835,6 +831,17 @@
             ></div>
           </div>
 
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Materias</label>
+            <input
+              type="text"
+              id="newTeacherSubjects"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: Matemáticas, Física, Programación"
+            />
+            <p class="text-xs text-gray-500 mt-1">Separa las materias por comas.</p>
+          </div>
+
           <div class="flex gap-3 pt-4">
             <button
               type="button"
@@ -974,6 +981,7 @@
       ];
 
       let filteredTeachers = [...teachers];
+      let subjectsById = {}; // { id: string[] }
       let currentEditIndex = -1;
 
       // Mobile Menu Functions
@@ -1043,6 +1051,20 @@
         if (activeBtn && activeBtn.classList.contains("nav-btn")) {
           activeBtn.classList.add("active", "bg-white", "bg-opacity-20");
         }
+
+        // Move teachers card between Dashboard and Teachers section
+        try {
+          const card = document.getElementById('teachersCard');
+          const host = document.getElementById('teachersCardHost');
+          const anchor = document.getElementById('teachersCardAnchor');
+          if (card && host && anchor) {
+            if (sectionName === 'teachers') {
+              if (card.parentElement !== host) host.appendChild(card);
+            } else if (sectionName === 'dashboard') {
+              if (card.parentElement !== anchor) anchor.appendChild(card);
+            }
+          }
+        } catch (e) { /* no-op */ }
       }
 
       // Initialize the application
@@ -1054,6 +1076,16 @@
           teachers = mapped.teachers;
           activities = mapped.activities;
           filteredTeachers = [...teachers];
+          // Load subjects map
+          try {
+            const s = await api.listAllSubjects();
+            const items = (s && s.items) || [];
+            subjectsById = {};
+            items.forEach(it => {
+              const id = it && it.id; const arr = Array.isArray(it && it.subjects) ? it.subjects : [];
+              subjectsById[id] = arr;
+            });
+          } catch (e) { subjectsById = {}; }
 
           document.getElementById("loadingState").classList.add("hidden");
           if (teachers.length === 0) {
@@ -1143,6 +1175,7 @@
             teachers = mapped.teachers;
             activities = mapped.activities;
             filteredTeachers = [...teachers];
+            try { const s = await api.listAllSubjects(); const items = (s&&s.items)||[]; subjectsById={}; items.forEach(it=>{ const id=it&&it.id; const arr=Array.isArray(it&&it.subjects)?it.subjects:[]; subjectsById[id]=arr; }); } catch(e){}
             buildTable();
             updateStats();
             updateCharts();
@@ -1181,6 +1214,7 @@
           "ID",
           "Nombre",
           "Apellidos",
+          "Materias",
           ...activities,
           "Progreso",
           "Acciones",
@@ -1246,6 +1280,13 @@
             "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
           lastNameCell.textContent = teacher.lastName;
           row.appendChild(lastNameCell);
+
+          // Subjects cell
+          const subjectsCell = document.createElement("td");
+          subjectsCell.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-700";
+          const subs = Array.isArray(subjectsById[teacher.id]) ? subjectsById[teacher.id] : [];
+          subjectsCell.textContent = subs.length ? subs.join(", ") : "-";
+          row.appendChild(subjectsCell);
 
           // Activity checkboxes
           let completedCount = 0;
@@ -1670,6 +1711,7 @@
         document.getElementById("newTeacherId").value = "";
         document.getElementById("newTeacherName").value = "";
         document.getElementById("newTeacherLastName").value = "";
+        try { document.getElementById("newTeacherSubjects").value = ""; } catch (e) {}
         clearErrors();
         document.getElementById("addModal").classList.remove("hidden");
         document.getElementById("addModal").classList.add("flex");
@@ -1769,13 +1811,20 @@
       }
 
       // Edit teacher
-      function editTeacher(index) {
+      async function editTeacher(index) {
         currentEditIndex = index;
         const teacher = filteredTeachers[index];
 
         document.getElementById("newTeacherId").value = teacher.id;
         document.getElementById("newTeacherName").value = teacher.name;
         document.getElementById("newTeacherLastName").value = teacher.lastName;
+        try {
+          showLoading('Cargando materias...');
+          const res = await api.getTeacherSubjects(teacher.id);
+          const subs = Array.isArray(res && res.subjects) ? res.subjects : [];
+          const el = document.getElementById('newTeacherSubjects');
+          if (el) el.value = subs.join(', ');
+        } catch(e) { /* ignore */ } finally { hideLoading(); }
 
         // Change modal title and button
         document.querySelector("#addModal h3").textContent = "Editar Docente";
@@ -2137,12 +2186,15 @@
         const id = document.getElementById("newTeacherId").value.trim();
         const name = document.getElementById("newTeacherName").value.trim();
         const lastName = document.getElementById("newTeacherLastName").value.trim();
+        const subjectsRaw = (document.getElementById("newTeacherSubjects") && document.getElementById("newTeacherSubjects").value) || "";
+        const subjects = subjectsRaw.split(",").map(s=>s.trim()).filter(Boolean);
         clearErrors && clearErrors();
         if (!id || !name || !lastName) return;
         try {
           showLoading("Agregando docente...");
           const r = await api.addOrUpdateTeacher(id, name, lastName);
           if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          if (subjects.length) { try { await api.setTeacherSubjects(id, subjects); } catch(e){} }
           closeAddModal && closeAddModal();
           await initializeApp();
         } catch (e) { console.error(e); }
@@ -2153,12 +2205,15 @@
         const id = document.getElementById("newTeacherId").value.trim();
         const name = document.getElementById("newTeacherName").value.trim();
         const lastName = document.getElementById("newTeacherLastName").value.trim();
+        const subjectsRaw = (document.getElementById("newTeacherSubjects") && document.getElementById("newTeacherSubjects").value) || "";
+        const subjects = subjectsRaw.split(",").map(s=>s.trim()).filter(Boolean);
         try {
           showLoading("Actualizando docente...");
           const teacher = filteredTeachers[currentEditIndex];
           const originalIndex = teacher && teacher.originalIndex;
           const r = await api.updateTeacherData(originalIndex, id, name, lastName);
           if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
+          try { await api.setTeacherSubjects(id, subjects); } catch(e){}
           closeAddModal && closeAddModal();
           resetAddModal && resetAddModal();
           await initializeApp();
@@ -2243,3 +2298,5 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   </body>
 </html>
+
+
