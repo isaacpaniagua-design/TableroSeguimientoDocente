@@ -55,8 +55,8 @@ window.setAuthToken = setAuthToken;
     } catch(e){ return []; }
   }
   function normalizeTeacherDoc(d){
-    var data = d.data() || {}; var activities = data.activities || {}; var subjects = Array.isArray(data.subjects)?data.subjects:[];
-    return { id: data.id || d.id, name: data.name||'', lastName: data.lastName||'', activities: activities, subjects: subjects, email: data.email||'', controlNumber: data.controlNumber||'' };
+    var data = d.data() || {}; var activities = data.activities || {}; var subjects = Array.isArray(data.subjects)?data.subjects:[]; var activitiesMeta = data.activitiesMeta || {};
+    return { id: data.id || d.id, name: data.name||'', lastName: data.lastName||'', activities: activities, activitiesMeta: activitiesMeta, subjects: subjects, email: data.email||'', controlNumber: data.controlNumber||'' };
   }
   window.api = {
     getPagedData: async function(page=1,pageSize=1000){
@@ -69,7 +69,7 @@ window.setAuthToken = setAuthToken;
       __pageMap.activities = activities.slice();
       var headers = ['Sel.','ID','Nombre','Apellidos'].concat(activities);
       var teachers = docs.map(function(t, idx){
-        var row = { originalIndex: idx, id: t.id, name: t.name, lastName: t.lastName, email: t.email||'', controlNumber: t.controlNumber||'' };
+        var row = { originalIndex: idx, id: t.id, name: t.name, lastName: t.lastName, email: t.email||'', controlNumber: t.controlNumber||'', activitiesMeta: t.activitiesMeta || {} };
         activities.forEach(function(h){ row[h] = !!(t.activities && t.activities[h]); });
         return row;
       });
@@ -122,6 +122,12 @@ window.setAuthToken = setAuthToken;
       if (!id || !activity) return { success:false, message:'Contexto no disponible' };
       var ref = fb.db.collection('teachers').doc(String(id));
       var data = {}; data['activities.'+activity] = !!value; data['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
+      try {
+        var u = (firebase && firebase.auth && firebase.auth().currentUser) || null;
+        var email = u && u.email ? String(u.email) : '';
+        data['activitiesMeta.'+activity+'.updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
+        if (email) data['activitiesMeta.'+activity+'.updatedBy'] = email;
+      } catch (e) {}
       await ref.update(data).catch(async function(){ await ref.set(data, { merge:true }); });
       emitChange('teacher:activityUpdate', { id: String(id), activity: String(activity), value: !!value });
       return { success:true };
