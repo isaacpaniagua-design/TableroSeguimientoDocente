@@ -336,19 +336,29 @@
             setDot('hc-app-dot', initialized);
             setText('hc-app', initialized ? 'inicializado' : 'no inicializado');
 
-            var authOk = false;
-            try { authOk = sdkLoaded && !!firebase.auth; } catch(e){}
-            setDot('hc-auth-dot', authOk);
-            setText('hc-auth', authOk ? 'disponible' : 'no disponible');
+            var authApi = false;
+            try { authApi = sdkLoaded && !!firebase.auth; } catch(e){}
+            var user = null;
+            try { user = authApi ? firebase.auth().currentUser : null; } catch(e){}
+            // Punto: verde si sesión iniciada, amarillo si API disponible pero no logueado, rojo si no hay API
+            setDot('hc-auth-dot', user ? true : (authApi ? null : false));
+            setText('hc-auth', user ? 'sesión iniciada' : (authApi ? 'sesión no iniciada' : 'no disponible'));
 
-            // Firestore simple GET (puede fallar por reglas: lo reflejamos)
-            var dbStatusText = 'no disponible';
-            var dbOk = false;
+            // Firestore: solo probar si hay sesión iniciada
+            var dbStatusText = user ? 'probando...' : 'requiere inicio de sesión';
+            var dbOk = null; // amarillo por defecto
             try {
               if (sdkLoaded && firebase.firestore) {
-                var db = firebase.firestore();
-                var snap = await db.collection('health_check').doc('hc').get();
-                dbOk = true; dbStatusText = snap.exists ? 'lectura OK (doc existe)' : 'lectura OK (doc no existe)';
+                if (user) {
+                  var db = firebase.firestore();
+                  var snap = await db.collection('health_check').doc('hc').get();
+                  dbOk = true;
+                  dbStatusText = snap.exists ? 'lectura OK (doc existe)' : 'lectura OK (doc no existe)';
+                } else {
+                  dbOk = null; // no probar sin sesión
+                }
+              } else {
+                dbOk = false; dbStatusText = 'no disponible';
               }
             } catch(e) {
               dbOk = false;
@@ -367,8 +377,14 @@
         var btn = document.getElementById('hc-run'); if (btn) btn.addEventListener('click', run);
         var hideBtn = document.getElementById('hc-hide'); if (hideBtn) hideBtn.addEventListener('click', hide);
         var closeBtn = document.getElementById('hc-close'); if (closeBtn) closeBtn.addEventListener('click', hide);
-        // Ejecuta una vez al cargar
-        if (document.readyState === 'complete') { setTimeout(run, 300); } else { window.addEventListener('load', function(){ setTimeout(run, 300); }); }
+        // Ejecuta una vez al cargar y al cambiar la sesión
+        function schedule(){ setTimeout(run, 300); }
+        if (document.readyState === 'complete') { schedule(); } else { window.addEventListener('load', schedule); }
+        try {
+          if (window.firebase && firebase.auth) {
+            firebase.auth().onAuthStateChanged(schedule);
+          }
+        } catch(e) {}
       })();
     </script>
     <!-- Login Page -->
