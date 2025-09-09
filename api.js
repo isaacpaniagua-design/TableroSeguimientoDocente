@@ -56,7 +56,7 @@ window.setAuthToken = setAuthToken;
   }
   function normalizeTeacherDoc(d){
     var data = d.data() || {}; var activities = data.activities || {}; var subjects = Array.isArray(data.subjects)?data.subjects:[];
-    return { id: data.id || d.id, name: data.name||'', lastName: data.lastName||'', activities: activities, subjects: subjects };
+    return { id: data.id || d.id, name: data.name||'', lastName: data.lastName||'', activities: activities, subjects: subjects, email: data.email||'', controlNumber: data.controlNumber||'' };
   }
   window.api = {
     getPagedData: async function(page=1,pageSize=1000){
@@ -69,7 +69,7 @@ window.setAuthToken = setAuthToken;
       __pageMap.activities = activities.slice();
       var headers = ['Sel.','ID','Nombre','Apellidos'].concat(activities);
       var teachers = docs.map(function(t, idx){
-        var row = { originalIndex: idx, id: t.id, name: t.name, lastName: t.lastName };
+        var row = { originalIndex: idx, id: t.id, name: t.name, lastName: t.lastName, email: t.email||'', controlNumber: t.controlNumber||'' };
         activities.forEach(function(h){ row[h] = !!(t.activities && t.activities[h]); });
         return row;
       });
@@ -157,6 +157,20 @@ window.setAuthToken = setAuthToken;
       var out = []; snap.docs.forEach(function(d){ var data=d.data()||{}; var subs = Array.isArray(data.subjects)?data.subjects:[]; out.push({ id: data.id || d.id, subjects: subs }); });
       return { items: out };
     },
+    getRecentTeachers: async function(limit){
+      var fb = ensureFB();
+      var lim = Number(limit)||5;
+      try {
+        var snap = await fb.db.collection('teachers').orderBy('updatedAt','desc').limit(lim).get();
+        var rows = snap.docs.map(normalizeTeacherDoc);
+        return { items: rows };
+      } catch (e) {
+        // Fallback if no index on updatedAt
+        var snap2 = await fb.db.collection('teachers').orderBy('id').limit(lim).get();
+        var rows2 = snap2.docs.map(normalizeTeacherDoc);
+        return { items: rows2 };
+      }
+    },
     bulkAddOrUpdateTeachers: async function(rows){
       var fb = ensureFB(); var batch = fb.db.batch();
       var activities = await fbGetActivities(); var actsTemplate={}; activities.forEach(function(h){actsTemplate[h]=false;});
@@ -199,6 +213,51 @@ window.setAuthToken = setAuthToken;
       await batch.commit();
       emitChange('seed:demo', { count: teachers.length });
       return { success:true, seeded: teachers.length };
+    },
+    seedDirectory: async function(){
+      var fb = ensureFB();
+      var items = [
+        { name:'Aarón Gilberto León Flores', id:'00000092313', controlNumber:'87007190', email:'aaron.leon92313@potros.itson.edu.mx' },
+        { name:'Arturo García Saiza', id:'00000090476', controlNumber:'87006214', email:'arturo.garcia90476@potros.itson.edu.mx' },
+        { name:'Bertha Julia Valle Cruz', id:'00000013648', controlNumber:'85000551', email:'bertha.valle13648@potros.itson.edu.mx' },
+        { name:'Carlos Alberto Ruiz Castrejón', id:'00000231195', controlNumber:'', email:'carlos.ruizc@potros.itson.edu.mx' },
+        { name:'Cynthia Beatriz Pérez Castro', id:'00000160602', controlNumber:'85000882', email:'cynthia.perez@potros.itson.edu.mx' },
+        { name:'Eduardo Lara García', id:'00000017041', controlNumber:'87006213', email:'eduardo.garcia17041@potros.itson.edu.mx' },
+        { name:'Isaac Noé Paniagua Ruiz', id:'00000099645', controlNumber:'89003371', email:'isaac.paniagua@potros.itson.edu.mx' },
+        { name:'Jesús Abraham Zazueta Castillo', id:'00000099610', controlNumber:'87006157', email:'jesus.zazueta99610@potros.itson.edu.mx' },
+        { name:'Jesús Antonio Pérez Ceceña', id:'00000009726', controlNumber:'87005932', email:'jesus.perez9726@potros.itson.edu.mx' },
+        { name:'Jesús Carlos Gaytán Salazar', id:'00000262383', controlNumber:'', email:'jesuscarlosgaytan@gmail.com' },
+        { name:'Jesús Rigoberto Villavicencio Navarro', id:'00000162447', controlNumber:'89003065', email:'jesus.villavicencio162447@potros.itson.edu.mx' },
+        { name:'Jorge Alberto Norzagaray Mora', id:'00000016329', controlNumber:'87005932', email:'jorge.norzagaray16329@potros.itson.edu.mx' },
+        { name:'Juan Manuel Osuna Aceves', id:'00000019413', controlNumber:'87001734', email:'juan.osuna19413@potros.itson.edu.mx' },
+        { name:'Julio Isaac Nava Cordero', id:'00000092307', controlNumber:'87007034', email:'julio.nava92307@potros.itson.edu.mx' },
+        { name:'Marco Antonio Tellechea Rodríguez', id:'00000019294', controlNumber:'87902065', email:'marco.tellechea19294@potros.itson.edu.mx' },
+        { name:'Miguel Ángel Moroyoqui Parra', id:'00000020641', controlNumber:'87004412', email:'miguel.moroyoqui20641@potros.itson.edu.mx' },
+        { name:'Ricardo Daniel Carrasco Correa', id:'00000020122', controlNumber:'87005261', email:'ricardo.carrasco20122@potros.itson.edu.mx' },
+        { name:'Roberto Limon Ulloa', id:'00000019401', controlNumber:'85000836', email:'roberto.limon@potros.itson.edu.mx' },
+        { name:'Saúl Grijalva Varillas', id:'00000062125', controlNumber:'89002789', email:'saul.grijalva62125@potros.itson.edu.mx' },
+        { name:'Sergio Castellanos Bustamante', id:'00000090851', controlNumber:'', email:'sergio.castellanos90851@potros.itson.edu.mx' },
+        { name:'Vinko Antonio Nevescanín Moreno', id:'00000206923', controlNumber:'87007385', email:'vinko.nevescanin206923@potros.itson.edu.mx' },
+        { name:'Zaira Guadalupe Bermúdez Pérez', id:'00000091125', controlNumber:'87006990', email:'zaira.bermudez91125@potros.itson.edu.mx' },
+      ];
+      var batch = fb.db.batch();
+      items.forEach(function(it){
+        var parts = String(it.name||'').trim().split(/\s+/);
+        var lastName = parts.length>1 ? parts.slice(-2).join(' ') : (parts[0]||'');
+        var firstName = parts.length>1 ? parts.slice(0,-2).join(' ') : '';
+        var ref = fb.db.collection('teachers').doc(String(it.id));
+        batch.set(ref, {
+          id: String(it.id||''),
+          name: String(firstName||''),
+          lastName: String(lastName||''),
+          email: String(it.email||''),
+          controlNumber: String(it.controlNumber||''),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge:true });
+      });
+      await batch.commit();
+      emitChange('seed:directory', { count: items.length });
+      return { success:true, seeded: items.length };
     }
   };
 })();

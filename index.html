@@ -335,6 +335,9 @@
             <button id="adminActionRecheck" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
               <i class="fa-solid fa-stethoscope mr-1"></i> Reprobar Health Check
             </button>
+            <button id="adminActionSeedDirectory" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
+              <i class="fa-solid fa-address-book mr-1"></i> Cargar directorio docentes
+            </button>
             <button id="adminActionSeed" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
               <i class="fa-solid fa-seedling mr-1"></i> Cargar datos de prueba
             </button>
@@ -356,6 +359,8 @@
         function isAdminUser(user){
           try { return !!(user && user.email && ADMIN_EMAILS.indexOf(user.email) !== -1); } catch(e){ return false; }
         }
+        // Expose admin check globally for other modules
+        try { window.isAdminUser = isAdminUser; } catch(e) {}
         function qs(id){ return document.getElementById(id); }
         function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
         function updateAdminUI(user){
@@ -391,6 +396,20 @@
               alert('Error al cargar datos de prueba');
             } finally { if (typeof hideLoading === 'function') hideLoading(); }
           });
+          var aSeedDir = qs('adminActionSeedDirectory');
+          if (aSeedDir) aSeedDir.addEventListener('click', async function(){
+            try {
+              if (!window.api || typeof api.seedDirectory !== 'function') { alert('Seed de directorio no disponible'); return; }
+              if (!confirm('Esto cargará/actualizará el directorio (correo y número de control) en Firestore. ¿Continuar?')) return;
+              if (typeof showLoading === 'function') showLoading('Cargando directorio...');
+              var r = await api.seedDirectory();
+              if (typeof initializeApp === 'function') await initializeApp();
+              if (typeof showNotification === 'function') showNotification('Directorio cargado ('+(r && r.seeded || 0)+')', 'success');
+            } catch (e) {
+              console.error(e);
+              alert('Error al cargar directorio');
+            } finally { if (typeof hideLoading === 'function') hideLoading(); }
+          });
           var aSignOut = qs('adminActionSignOut');
           if (aSignOut) aSignOut.addEventListener('click', function(){ try { if (typeof logout === 'function') logout(); else if (window.firebase && firebase.auth) firebase.auth().signOut(); } catch(e) {} });
         }
@@ -418,17 +437,44 @@
         }
         async function exportTeachersReport(){
           try {
-            if (!window.api || typeof api.getAllTeachersForReport !== 'function') { alert('API no disponible'); return; }
+            if (!window.api || typeof api.getPagedData !== 'function') { alert('API no disponible'); return; }
             if (typeof showLoading === 'function') showLoading('Exportando reporte...');
-            var resp = await api.getAllTeachersForReport();
+            var isAdmin = false; try { isAdmin = (typeof window.isAdminUser==='function') && window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser)||null); } catch(_){}
+            var resp = await api.getPagedData(1, 1000);
             if (!resp || resp.success === false) { alert('No se pudieron obtener datos'); return; }
-            var headers = Array.isArray(resp.headers)?resp.headers.slice():[];
-            // Excluir columna "Sel." si está presente
-            if (headers.length && headers[0].toLowerCase().startsWith('sel')) headers.shift();
+            var headersAll = Array.isArray(resp.headers)?resp.headers.slice():[];
+            if (headersAll.length && headersAll[0].toLowerCase().startsWith('sel')) headersAll.shift();
+            var activities = headersAll.slice(4);
             var rows = Array.isArray(resp.teachers)?resp.teachers:[];
-            // Normalizar filas a objeto con claves de headers y traducir booleanos
-            var data = rows.map(function(r){
-              var o = {}; headers.forEach(function(h){ var v = r[h]; if (typeof v === 'boolean') v = v ? 'Sí' : 'No'; o[h] = v==null?'':v; }); return o;
+
+            // Subject filter map
+            var subjectMap = {};
+            try { if (typeof api.listAllSubjects === 'function') { var s = await api.listAllSubjects(); (s && s.items || []).forEach(function(it){ subjectMap[String(it.id||'')] = Array.isArray(it.subjects)?it.subjects:[]; }); } } catch(_){ }
+            var subjectQuery = (window.prompt('Filtrar por materia (deja vacío para todas):','')||'').trim();
+            var compQuery = (window.prompt('Filtrar por completitud (todos/completos/parciales/ninguno):','todos')||'').trim().toLowerCase();
+            function passCompletion(t){
+              if (!activities.length) return compQuery==='todos' || compQuery==='';
+              var completed = activities.filter(function(h){ return !!t[h]; }).length;
+              if (compQuery==='completos') return completed===activities.length;
+              if (compQuery==='ninguno') return completed===0;
+              if (compQuery==='parciales') return completed>0 && completed<activities.length;
+              return true;
+            }
+            function passSubject(t){
+              if (!subjectQuery) return true;
+              var subs = subjectMap[String(t.id||'')] || [];
+              return subs.some(function(x){ return String(x||'').toLowerCase()===subjectQuery.toLowerCase(); });
+            }
+            var filtered = rows.filter(function(t){ return passCompletion(t) && passSubject(t); });
+
+            var headers = ['ID','Nombre','Apellidos'];
+            if (isAdmin) { headers.push('Correo','No. Control'); }
+            headers = headers.concat(activities);
+            var data = filtered.map(function(r){
+              var o = { 'ID': r.id||'', 'Nombre': r.name||'', 'Apellidos': r.lastName||'' };
+              if (isAdmin) { o['Correo'] = r.email||''; o['No. Control'] = r.controlNumber||''; }
+              activities.forEach(function(h){ var v = r[h]; if (typeof v==='boolean') v = v ? 'Sí' : 'No'; o[h] = v==null?'':v; });
+              return o;
             });
             var filename = 'reporte_docentes_'+formatDate(new Date());
             if (window.XLSX && XLSX.utils && XLSX.writeFile) {
@@ -451,6 +497,34 @@
           }
         }
         window.exportTeachersReport = exportTeachersReport;
+      })();
+    </script>
+
+    <script>
+      // Ocultar accesos a gestión de actividades desde el dashboard
+      (function(){
+        function hideActivitiesUI(){
+          try {
+            document.querySelectorAll('[onclick*="openActivitiesModal"]').forEach(function(el){ el.style.display = 'none'; });
+          } catch(e) {}
+        }
+        if (document.readyState === 'complete') hideActivitiesUI(); else window.addEventListener('load', hideActivitiesUI);
+      })();
+    </script>
+
+    <script>
+      // Enforce admin-only controls inside modals (e.g., Guardar Cambios de Actividades)
+      (function(){
+        function enforceAdminOnly(){
+          try {
+            var user = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+            var isAdmin = (typeof window.isAdminUser === 'function') ? window.isAdminUser(user) : false;
+            var saveBtn = document.querySelector('#activitiesModal button[onclick="saveActivities()"]');
+            if (saveBtn) saveBtn.style.display = isAdmin ? '' : 'none';
+          } catch (e) {}
+        }
+        if (document.readyState === 'complete') enforceAdminOnly(); else window.addEventListener('load', enforceAdminOnly);
+        try { if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(enforceAdminOnly); } catch(e) {}
       })();
     </script>
 
@@ -1144,6 +1218,14 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Dashboard Section -->
         <div id="dashboardSection" class="section active">
+          <!-- Recent Teachers Preview -->
+          <div class="bg-white rounded-xl shadow-lg p-6 card-hover mb-8">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-gray-900">Últimos docentes registrados</h3>
+              <span class="text-xs text-gray-500">Resumen rápido</span>
+            </div>
+            <div id="recentTeachersPreview" class="divide-y divide-gray-100"></div>
+          </div>
           <!-- Stats Cards -->
           <div
             class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
@@ -1659,30 +1741,7 @@
               <!-- Activities will be populated here -->
             </div>
           </div>
-
-          <div class="border-t pt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2"
-              >Agregar Nueva Actividad:</label
-            >
-            <div class="flex gap-3">
-              <input
-                type="text"
-                id="newActivityName"
-                placeholder="Nombre de la nueva actividad"
-                class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <button
-                onclick="addActivity()"
-                class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                <i class="fas fa-plus mr-2"></i>Agregar
-              </button>
-            </div>
-            <div
-              id="activityError"
-              class="text-red-600 text-sm mt-1 hidden"
-            ></div>
-          </div>
+          <!-- Sección de agregar nueva actividad eliminada -->
 
           <div class="flex gap-3 pt-6">
             <button
@@ -2017,9 +2076,21 @@
             console.error('getPagedData failed', resp && resp.message);
             throw new Error(resp && resp.message ? resp.message : 'No se pudo obtener datos');
           }
-          const mapped = mapPagedResponseToModel(resp);
-          teachers = mapped.teachers;
-          activities = mapped.activities;
+          teachers = Array.isArray(resp.teachers) ? resp.teachers : [];
+          const headers = Array.isArray(resp.headers) ? resp.headers : [];
+          activities = headers.slice(4);
+          // Filtrado por rol: no-admin solo ve su propio registro
+          try {
+            var u = (firebase && firebase.auth && firebase.auth().currentUser) || null;
+            if (typeof window.isAdminUser === 'function' && !window.isAdminUser(u)) {
+              var email = (u && u.email) ? String(u.email).toLowerCase() : '';
+              if (email) {
+                teachers = teachers.filter(function(t){ return String(t.email||'').toLowerCase() === email; });
+              } else {
+                teachers = [];
+              }
+            }
+          } catch (e) { }
           // Load subjects for all teachers and attach
           try {
             const s = await api.listAllSubjects();
@@ -2047,6 +2118,8 @@
           }
           updateStats();
           updateCharts();
+          renderActivitiesPreview();
+          renderRecentTeachersPreview();
           ensureSubjectFilterUI();
         } catch (err) {
           console.error("Error cargando datos:", err);
@@ -2377,12 +2450,16 @@
         tableHeader.innerHTML = "";
         tableBody.innerHTML = "";
 
-        // Build header
+        // Build header (with admin-only columns)
+        const isAdminTbl = (function(){
+          try { return (typeof window.isAdminUser === 'function') && window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser)||null); } catch(e){ return false; }
+        })();
         const headers = [
           "Sel.",
           "ID",
           "Nombre",
           "Apellidos",
+          ...(isAdminTbl ? ["Correo", "No. Control"] : []),
           "Materias",
           ...activities,
           "Progreso",
@@ -2450,6 +2527,19 @@
           lastNameCell.textContent = teacher.lastName;
           row.appendChild(lastNameCell);
 
+          // Admin-only columns: Correo, No. Control
+          if (isAdminTbl) {
+            const emailCell = document.createElement("td");
+            emailCell.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-700";
+            emailCell.textContent = (teacher.email || "-");
+            row.appendChild(emailCell);
+
+            const controlCell = document.createElement("td");
+            controlCell.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-700";
+            controlCell.textContent = (teacher.controlNumber || "-");
+            row.appendChild(controlCell);
+          }
+
           // Subjects (read-only)
           const subjectsCell = document.createElement("td");
           subjectsCell.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-700";
@@ -2470,6 +2560,7 @@
             if (activityCheckbox.checked) completedCount++;
 
             activityCheckbox.addEventListener("change", async function () {
+              try { if (typeof window.isAdminUser === 'function' && !window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser)||null)) { this.checked = !this.checked; showNotification('Solo administradores pueden editar', 'error'); return; } } catch(_) {}
               teacher.activities[activity] = this.checked;
               try {
                 showLoading("Actualizando actividad...");
@@ -2553,9 +2644,11 @@
           subjectsBtn.title = "Materias";
           subjectsBtn.onclick = () => editSubjectsForTeacher(teacher.id);
 
+          // Append actions and then hide for non-admins
           actionsCell.appendChild(editBtn);
           actionsCell.appendChild(deleteBtn);
           actionsCell.appendChild(subjectsBtn);
+          try { if (typeof window.isAdminUser === 'function' && !window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser)||null)) { editBtn.style.display='none'; deleteBtn.style.display='none'; subjectsBtn.style.display='none'; } } catch(_) {}
           row.appendChild(actionsCell);
 
           tableBody.appendChild(row);
@@ -3190,12 +3283,51 @@
         }
       }
 
-      function saveActivities() {
-        closeActivitiesModal();
-        buildTable();
-        updateStats();
-        updateCharts();
-        showNotification("Actividades actualizadas exitosamente", "success");
+      async function saveActivities() {
+        try {
+          if (!window.api || typeof api.updateActivityHeaders !== 'function') throw new Error('API no disponible');
+          showLoading('Guardando actividades...');
+          await api.updateActivityHeaders(activities);
+          await initializeApp();
+          showNotification('Actividades actualizadas', 'success');
+        } catch (e) {
+          console.error(e);
+          showNotification('No se pudieron guardar las actividades', 'error');
+        } finally {
+          hideLoading();
+          closeActivitiesModal();
+        }
+      }
+
+      async function renderRecentTeachersPreview() {
+        try {
+          const container = document.getElementById('recentTeachersPreview');
+          if (!container) return;
+          container.innerHTML = '<div class="text-sm text-gray-500">Cargando...</div>';
+          if (!window.api || typeof api.getRecentTeachers !== 'function') {
+            container.innerHTML = '<div class="text-sm text-gray-500">No disponible</div>';
+            return;
+          }
+          const r = await api.getRecentTeachers(5);
+          const items = (r && r.items) || [];
+          if (items.length === 0) { container.innerHTML = '<div class="text-sm text-gray-500">Sin registros</div>'; return; }
+          const total = Array.isArray(activities) ? activities.length : 0;
+          container.innerHTML = items.map(t => {
+            const completed = (activities||[]).filter(a => t.activities && t.activities[a]).length;
+            const pct = total>0 ? Math.round((completed/total)*100) : 0;
+            return `
+              <div class="py-3 flex items-center justify-between">
+                <div class="min-w-0">
+                  <div class="font-medium text-gray-900 truncate">${t.lastName || ''}, ${t.name || ''} <span class="text-gray-400 text-xs ml-2">${t.id || ''}</span></div>
+                  <div class="text-xs text-gray-500">${completed}/${total} actividades • ${pct}%</div>
+                </div>
+                <div class="w-32 bg-gray-100 rounded-full h-2 ml-4" aria-hidden="true">
+                  <div class="bg-primary-500 h-2 rounded-full" style="width:${pct}%;"></div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } catch (e) { console.warn('recent preview error', e); }
       }
 
       // Generate PDF report
