@@ -13,7 +13,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="api.js"></script>
 
     <script>
@@ -142,6 +141,16 @@
         width: 40px;
         height: 40px;
         animation: spin 1s linear infinite;
+      }
+
+      /* Mini spinner para refrescos ligeros (no intrusivo) */
+      .mini-spinner {
+        border: 2px solid #e5e7eb; /* gray-200 */
+        border-top: 2px solid #2e7d32; /* primary */
+        border-radius: 50%;
+        width: 12px;
+        height: 12px;
+        animation: spin 0.9s linear infinite;
       }
 
       @keyframes spin {
@@ -365,11 +374,170 @@
           var aRefresh = qs('adminActionRefresh');
           if (aRefresh) aRefresh.addEventListener('click', function(){ try { if (typeof initializeApp === 'function') initializeApp(); } catch(e) {} });
           var aExport = qs('adminActionExport');
-          if (aExport) aExport.addEventListener('click', function(){ alert('Exportar: pendiente de implementar'); });
+          if (aExport) aExport.addEventListener('click', function(){ try { if (window.exportTeachersReport) exportTeachersReport(); else alert('Export no disponible'); } catch(e) { alert('Error al exportar'); } });
           var aSignOut = qs('adminActionSignOut');
           if (aSignOut) aSignOut.addEventListener('click', function(){ try { if (typeof logout === 'function') logout(); else if (window.firebase && firebase.auth) firebase.auth().signOut(); } catch(e) {} });
         }
         function init(){ bind(); try { if (window.firebase && firebase.auth) { firebase.auth().onAuthStateChanged(updateAdminUI); updateAdminUI(firebase.auth().currentUser); } } catch(e) {}}
+        if (document.readyState === 'complete') init(); else window.addEventListener('load', init);
+      })();
+    </script>
+
+    <script>
+      // Export helpers (XLSX with CSV fallback)
+      (function(){
+        function formatDate(dt){
+          function z(n){ return (n<10?'0':'')+n; }
+          return dt.getFullYear()+''+z(dt.getMonth()+1)+''+z(dt.getDate())+'_'+z(dt.getHours())+z(dt.getMinutes());
+        }
+        function toCSV(headers, rows){
+          function esc(v){
+            var s = String(v==null?'':v);
+            if (s.search(/[",\n]/)>=0) s = '"'+s.replace(/"/g,'""')+'"';
+            return s;
+          }
+          var lines = [ headers.map(esc).join(',') ];
+          rows.forEach(function(r){ lines.push(headers.map(function(h){ return esc(r[h]); }).join(',')); });
+          return lines.join('\n');
+        }
+        async function exportTeachersReport(){
+          try {
+            if (!window.api || typeof api.getAllTeachersForReport !== 'function') { alert('API no disponible'); return; }
+            if (typeof showLoading === 'function') showLoading('Exportando reporte...');
+            var resp = await api.getAllTeachersForReport();
+            if (!resp || resp.success === false) { alert('No se pudieron obtener datos'); return; }
+            var headers = Array.isArray(resp.headers)?resp.headers.slice():[];
+            // Excluir columna "Sel." si está presente
+            if (headers.length && headers[0].toLowerCase().startsWith('sel')) headers.shift();
+            var rows = Array.isArray(resp.teachers)?resp.teachers:[];
+            // Normalizar filas a objeto con claves de headers y traducir booleanos
+            var data = rows.map(function(r){
+              var o = {}; headers.forEach(function(h){ var v = r[h]; if (typeof v === 'boolean') v = v ? 'Sí' : 'No'; o[h] = v==null?'':v; }); return o;
+            });
+            var filename = 'reporte_docentes_'+formatDate(new Date());
+            if (window.XLSX && XLSX.utils && XLSX.writeFile) {
+              var ws = XLSX.utils.json_to_sheet(data, { header: headers });
+              var wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Docentes');
+              XLSX.writeFile(wb, filename + '.xlsx');
+            } else {
+              var csv = toCSV(headers, data);
+              var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              var a = document.createElement('a');
+              var url = URL.createObjectURL(blob);
+              a.href = url; a.download = filename + '.csv'; a.style.display='none'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); document.body.removeChild(a); }, 0);
+            }
+          } catch(e) {
+            console.error('Export error', e);
+            alert('Error durante la exportación');
+          } finally {
+            if (typeof hideLoading === 'function') hideLoading();
+          }
+        }
+        window.exportTeachersReport = exportTeachersReport;
+      })();
+    </script>
+
+    <script>
+      // Auto refresh UI on data changes from API
+      (function(){
+        // Indicador ligero y con limitación de frecuencia
+        (function(){
+          var lastShown = 0;
+          var timer = null;
+          var MIN_DURATION = 600;   // ms mínimo visible para evitar parpadeo
+          var THROTTLE_MS = 3000;   // no mostrar más de una vez cada 3s
+          function el(){ return document.getElementById('miniRefreshSpinner'); }
+          window.showMiniRefresh = function(){
+            var now = Date.now();
+            if (now - lastShown < THROTTLE_MS) return; // limitar frecuencia
+            lastShown = now;
+            var e = el(); if (!e) return;
+            e.style.display = '';
+            clearTimeout(timer);
+            timer = setTimeout(function(){ try { window.hideMiniRefresh(); } catch(_){} }, MIN_DURATION);
+          };
+          window.hideMiniRefresh = function(){ var e = el(); if (e) e.style.display = 'none'; };
+        })();
+
+        function isPromise(p){ return p && typeof p.then === 'function'; }
+        async function onChange(){
+          try {
+            if (typeof showMiniRefresh === 'function') showMiniRefresh();
+            if (typeof initializeApp === 'function') {
+              var r = initializeApp();
+              if (isPromise(r)) await r;
+            }
+          } catch (err) {
+            console && console.warn && console.warn('Refresh after change failed', err);
+          } finally {
+            try { if (typeof hideMiniRefresh === 'function') hideMiniRefresh(); } catch(_){}
+          }
+        }
+        if (typeof window !== 'undefined') {
+          try { window.addEventListener('data:changed', onChange); } catch (e) {}
+        }
+      })();
+    </script>
+
+    <!-- FAB de inicio de sesión con Google (redirige) -->
+    <div id="loginFab" class="fixed bottom-24 right-4 hidden z-40">
+      <button id="loginRedirectBtn" class="px-4 py-2 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <i class="fa-brands fa-google mr-2"></i> Iniciar sesión con Google
+      </button>
+    </div>
+
+    <script>
+      (function(){
+        function qs(id){ return document.getElementById(id); }
+        function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+        async function redirectGoogleSignIn(){
+          try {
+            if (!window.firebase || !firebase.auth) throw new Error('Firebase Auth no disponible');
+            var provider = new firebase.auth.GoogleAuthProvider();
+            // Forzar redirección (evita bloqueos de popup/FedCM en incógnito)
+            await firebase.auth().signInWithRedirect(provider);
+          } catch (e) {
+            console.error('Error al iniciar sesión (redirect):', e);
+            alert('No se pudo iniciar sesión. Revisa que el dominio esté autorizado y habilita pop-ups/cookies para accounts.google.com');
+          }
+        }
+        async function robustGoogleSignIn(){
+          try {
+            if (!window.firebase || !firebase.auth) throw new Error('Firebase Auth no disponible');
+            var provider = new firebase.auth.GoogleAuthProvider();
+            try {
+              await firebase.auth().signInWithPopup(provider);
+            } catch (err) {
+              if (
+                (err && err.code && (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user')) ||
+                (err && err.message && (String(err.message).includes('FedCM') || String(err.message).includes('accounts list is empty') || String(err.message).includes('NetworkError')))
+              ) {
+                // Fallback a redirect
+                await firebase.auth().signInWithRedirect(provider);
+              } else {
+                throw err;
+              }
+            }
+          } catch (e) {
+            console.error('Error al iniciar sesión (robusto):', e);
+            alert('No se pudo iniciar sesión. Prueba con el botón de redirección o habilita pop-ups/cookies.');
+          }
+        }
+        function bind(){
+          var btn = qs('loginRedirectBtn');
+          if (btn) btn.addEventListener('click', redirectGoogleSignIn);
+          // Exporta helpers por consola
+          window.redirectGoogleSignIn = redirectGoogleSignIn;
+          window.robustGoogleSignIn = robustGoogleSignIn;
+        }
+        function update(){
+          try {
+            var user = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
+            toggle(qs('loginFab'), !user);
+          } catch (e) {}
+        }
+        function init(){ bind(); update(); try { if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(function(){ update(); }); } catch(e) {} }
         if (document.readyState === 'complete') init(); else window.addEventListener('load', init);
       })();
     </script>
@@ -538,37 +706,15 @@
 
         <!-- Google Sign-In Button -->
         <div class="mb-6">
-          <div
-            id="g_id_onload"
-            data-client_id="462104222746-m1hkvicmjlj1qi7ggiliq708f9v128ko.apps.googleusercontent.com"
-            data-context="signin"
-            data-ux_mode="popup"
-            data-auto_prompt="false"
-          ></div>
+          
 
+          <!-- Botón alternativo por redirección (evita bloqueos FedCM/incógnito) -->
           <button
-            onclick="initiateGoogleSignIn()"
-            class="google-btn w-full bg-white hover:bg-gray-50 text-gray-700 font-medium py-4 px-6 rounded-xl border border-gray-300 flex items-center justify-center space-x-3"
+            onclick="robustGoogleSignIn()"
+            class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center space-x-3"
           >
-            <svg class="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            <span>Continuar con Google</span>
+            <i class="fa-brands fa-google"></i>
+            <span>Iniciar sesión con Google (alternativa)</span>
           </button>
 
           <!-- Alternative Manual Login (Demo) -->
@@ -1924,6 +2070,7 @@
           bar.id = "refreshIndicatorBar";
           bar.className = "fixed bottom-4 right-4 z-40 bg-white shadow-lg border border-gray-200 rounded-lg px-4 py-2 flex items-center space-x-3";
           bar.innerHTML = `
+            <span id="miniRefreshSpinner" class="mini-spinner" style="display:none"></span>
             <span class="text-xs text-gray-600" id="lastRefreshText">Sin actualizar</span>
             <button id="toggleRefreshBtn" class="text-xs px-2 py-1 rounded bg-primary-500 text-white hover:bg-primary-600">Pausar</button>
           `;
@@ -1936,24 +2083,7 @@
         updateRefreshIndicator();
       }
 
-      // Try to initialize Google Sign-In once the library is ready
-      (function tryInitGSI() {
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-          try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
-          return;
-        }
-        // Fallbacks: attempt on load events
-        window.addEventListener('load', function () {
-          if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
-          }
-        });
-        document.addEventListener('readystatechange', function () {
-          if (document.readyState === 'complete' && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            try { initializeGoogleSignIn(); } catch (e) { /* no-op */ }
-          }
-        });
-      })();
+      // GIS init removed
 
       function setLastRefreshNow() {
         lastRefreshAt = new Date();
@@ -3204,8 +3334,7 @@
 
       // Initialize app when page loads
       window.addEventListener("load", function () {
-        // Initialize Google Sign-In
-        initializeGoogleSignIn();
+        // Initialize Google Sign-In (removed)
 
         // Check for existing session
         checkExistingSession();
@@ -3340,10 +3469,7 @@
     <script>
       // Ensure global access to handlers after definitions
       if (typeof window !== 'undefined') {
-        window.initiateGoogleSignIn = window.initiateGoogleSignIn || initiateGoogleSignIn;
         window.demoLogin = window.demoLogin || demoLogin;
-        window.handleCredentialResponse = window.handleCredentialResponse || handleCredentialResponse;
-        window.initializeGoogleSignIn = window.initializeGoogleSignIn || initializeGoogleSignIn;
       }
     </script>
   </body>

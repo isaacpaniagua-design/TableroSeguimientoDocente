@@ -83,6 +83,14 @@ async function callWithLoader(message, fn) {
   }
 }
 
+// Emit UI refresh events after data changes
+function emitChange(op, detail) {
+  try {
+    const payload = { op: String(op || 'change'), ...(detail || {}) };
+    window.dispatchEvent(new CustomEvent('data:changed', { detail: payload }));
+  } catch (e) {}
+}
+
 // High-level API wrappers
 const api = {
   getPagedData: (page = 1, pageSize = 1000) =>
@@ -204,11 +212,13 @@ window.setAuthToken = setAuthToken;
       var activities = await fbGetActivities();
       var acts = {}; activities.forEach(function(h){ acts[h]=false; });
       await fb.db.collection('teachers').doc(String(id)).set({ id:String(id), name:String(name||''), lastName:String(lastName||''), activities: acts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      emitChange('teacher:addOrUpdate', { id: String(id) });
       return { success:true };
     },
     updateTeacherData: async function(originalIndex,id,name,lastName){
       var fb = ensureFB();
       await fb.db.collection('teachers').doc(String(id)).set({ id:String(id), name:String(name||''), lastName:String(lastName||''), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      emitChange('teacher:update', { id: String(id) });
       return { success:true };
     },
     updateCheckboxState: async function(originalIndex,colIndex,value){
@@ -219,17 +229,20 @@ window.setAuthToken = setAuthToken;
       var ref = fb.db.collection('teachers').doc(String(id));
       var data = {}; data['activities.'+activity] = !!value; data['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
       await ref.update(data).catch(async function(){ await ref.set(data, { merge:true }); });
+      emitChange('teacher:activityUpdate', { id: String(id), activity: String(activity), value: !!value });
       return { success:true };
     },
     deleteMultipleTeachers: async function(originalIndices){
       var fb = ensureFB();
       var ids = (originalIndices||[]).map(function(i){ return __pageMap.indexToId[Number(i)||0]; }).filter(Boolean);
       var batch = fb.db.batch(); ids.forEach(function(id){ batch.delete(fb.db.collection('teachers').doc(String(id))); }); await batch.commit();
+      emitChange('teacher:deleteMultiple', { ids: ids });
       return { success:true };
     },
     updateActivityHeaders: async function(headers){
       var fb = ensureFB();
       await fb.db.collection('settings').doc('activities').set({ headers: Array.isArray(headers)?headers:[], updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      emitChange('activities:updateHeaders', { headers: Array.isArray(headers)?headers:[] });
       return { success:true };
     },
     getTeacherSubjects: async function(id){
@@ -241,6 +254,7 @@ window.setAuthToken = setAuthToken;
     setTeacherSubjects: async function(id, subjects){
       var fb = ensureFB();
       await fb.db.collection('teachers').doc(String(id)).set({ subjects: Array.isArray(subjects)?subjects:[], updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      emitChange('teacher:setSubjects', { id: String(id) });
       return { success:true };
     },
     listAllSubjects: async function(){
@@ -253,12 +267,16 @@ window.setAuthToken = setAuthToken;
       var fb = ensureFB(); var batch = fb.db.batch();
       var activities = await fbGetActivities(); var actsTemplate={}; activities.forEach(function(h){actsTemplate[h]=false;});
       (rows||[]).forEach(function(r){ var id=String((r&&r.id)||''); if(!id) return; var ref=fb.db.collection('teachers').doc(id); batch.set(ref, { id:id, name:String(r.name||''), lastName:String(r.lastName||''), activities: actsTemplate, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true }); });
-      await batch.commit(); return { result: (rows||[]).map(function(r){ return { id:r&&r.id, success:true }; }) };
+      await batch.commit();
+      emitChange('teacher:bulkAddOrUpdate', { count: (rows||[]).length });
+      return { result: (rows||[]).map(function(r){ return { id:r&&r.id, success:true }; }) };
     },
     bulkSetSubjects: async function(items){
       var fb = ensureFB(); var batch = fb.db.batch();
       (items||[]).forEach(function(it){ var id=String((it&&it.id)||''); if(!id) return; var ref=fb.db.collection('teachers').doc(id); batch.set(ref, { subjects: Array.isArray(it.subjects)?it.subjects:[] }, { merge:true }); });
-      await batch.commit(); return { success:true };
+      await batch.commit();
+      emitChange('teacher:bulkSetSubjects', { count: (items||[]).length });
+      return { success:true };
     }
   };
 })();
