@@ -1477,7 +1477,7 @@
                         Distribución de completitud de actividades
                       </p>
                     </div>
-                  <div class="w-full"><canvas id="generalProgressChart" class="w-full" style="height: 360px;"></canvas></div>
+                  <div class="w-full"><canvas id="generalProgressChart" class="w-full" style="height: 240px;"></canvas></div>
                     <div
                       id="generalStats"
                       class="mt-4 grid grid-cols-2 gap-4 text-center"
@@ -2910,7 +2910,7 @@
                       <div class="text-xs text-gray-500" ${isNA ? 'title="'+naHint+'"' : ''}>${countLabel}</div>
                         </div>
                     </div>
-                    <div class="w-full"><canvas id="individualChart_${index}" class="w-full" style="height: 120px;"></canvas></div>
+                    <div class="w-full"><canvas id="individualChart_${index}" class="w-full" style="height: 90px;"></canvas></div>
                 `;
           container.appendChild(chartDiv);
 
@@ -3466,13 +3466,23 @@
         doc.setTextColor("#000000");
         doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 35);
         doc.text(`Total de Docentes: ${teachers.length}`, 14, 45);
+        // Summary: activities count and average completion
+        try {
+          let aCount = Array.isArray(activities) ? activities.length : 0;
+          let completed = 0;
+          let possible = (teachers.length || 0) * aCount;
+          teachers.forEach(t => { (activities||[]).forEach(a => { if (getActivityState(t, a)) completed++; }); });
+          const avg = possible > 0 ? ((completed / possible) * 100).toFixed(1) + '%' : 'N/A';
+          doc.text(`Actividades configuradas: ${aCount}`, 14, 53);
+          doc.text(`Promedio de completitud: ${avg}`, 14, 58);
+        } catch (e) {}
 
         // (chart will be rendered below after computing stats)
 
         // General progress stats for chart
         let full = 0, partial = 0, none = 0;
         teachers.forEach((t) => {
-          const completed = activities.filter((a) => t.activities[a]).length;
+          const completed = activities.filter((a) => getActivityState(t, a)).length;
           if (completed === activities.length && activities.length > 0) full++;
           else if (completed > 0) partial++;
           else none++;
@@ -3505,7 +3515,7 @@
         // Table data
         const tableData = teachers.map((teacher) => {
           const completedCount = activities.filter(
-            (activity) => teacher.activities[activity]
+            (activity) => getActivityState(teacher, activity)
           ).length;
           const progress =
             activities.length > 0
@@ -3516,9 +3526,9 @@
             teacher.id,
             teacher.name,
             teacher.lastName,
-            ...activities.map((activity) =>
-              teacher.activities[activity] ? "Sí" : "No"
-            ),
+            ...activities.map((activity) => (
+              getActivityState(teacher, activity) ? "Sí" : "No"
+            )),
             progress,
           ];
         });
@@ -3541,6 +3551,60 @@
             cellPadding: 3,
           },
         });
+
+        // New page: per-teacher mini charts
+        try {
+          doc.addPage();
+          doc.setFontSize(14);
+          doc.text("Gráficos por docente", 14, 20);
+          const cols = 3; // charts per row
+          const imgW = 60; // mm
+          const imgH = 40; // mm
+          const gapX = 6;  // mm
+          const startX = 14;
+          let x = startX, y = 28;
+          let col = 0;
+          for (let i = 0; i < teachers.length; i++) {
+            const t = teachers[i];
+            const total = activities.length;
+            const completed = activities.filter(a => getActivityState(t, a)).length;
+            const pending = total > 0 ? (total - completed) : 0;
+            // Build small doughnut chart
+            const c = document.createElement('canvas'); c.width = 360; c.height = 240; const cx = c.getContext('2d');
+            const mini = new Chart(cx, {
+              type: 'doughnut',
+              data: { labels: ['Completadas','Pendientes'], datasets: [{ data: [completed, pending], backgroundColor: ['#2E7D32','#E5E7EB'], borderColor: '#fff', borderWidth: 2 }] },
+              options: { responsive: false, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } }
+            });
+            await new Promise(r => setTimeout(r, 60));
+            const img = c.toDataURL('image/png');
+            try { mini.destroy(); } catch(e) {}
+            // Add heading and image
+            doc.setFontSize(10);
+            const title = `${t.lastName || ''}, ${t.name || ''}`.trim();
+            doc.text(title, x, y);
+            doc.addImage(img, 'PNG', x, y + 2, imgW, imgH);
+            // progress text under image
+            const pct = total>0 ? Math.round((completed/total)*100) : 0;
+            doc.setFontSize(9);
+            const label = total>0 ? `${completed}/${total} (${pct}%)` : 'N/A';
+            doc.text(label, x, y + 2 + imgH + 5);
+
+            // advance grid
+            col++;
+            if (col >= cols) { col = 0; x = startX; y += imgH + 18; }
+            else { x += imgW + gapX; }
+            // new page if overflow
+            if (y + imgH + 20 > doc.internal.pageSize.getHeight()) {
+              doc.addPage();
+              doc.setFontSize(14);
+              doc.text("Gráficos por docente (cont.)", 14, 20);
+              x = startX; y = 28; col = 0;
+            }
+          }
+        } catch (e) {
+          console.warn('mini charts error', e);
+        }
 
         doc.save(
           `reporte-academico-${new Date().toISOString().slice(0, 10)}.pdf`
