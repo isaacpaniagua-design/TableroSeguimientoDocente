@@ -2397,6 +2397,21 @@
       let currentSubjectsTeacherId = null;
       let subjectsWorkingList = [];
 
+      // Helpers to read/write activity state regardless of data shape
+      function getActivityState(t, a) {
+        try {
+          if (t && t.activities && typeof t.activities === 'object' && (a in t.activities)) return !!t.activities[a];
+          return !!t[a];
+        } catch (e) { return false; }
+      }
+      function setActivityState(t, a, v) {
+        try {
+          if (!t.activities || typeof t.activities !== 'object') t.activities = {};
+          t.activities[a] = !!v;
+          t[a] = !!v;
+        } catch (e) {}
+      }
+
       function openSubjectsModalPanel() {
         const m = document.getElementById('subjectsModal');
         m.classList.remove('hidden'); m.classList.add('flex');
@@ -2556,12 +2571,12 @@
             activityCheckbox.type = "checkbox";
             activityCheckbox.className =
               "rounded border-gray-300 text-primary-600 focus:ring-primary-500";
-            activityCheckbox.checked = teacher.activities[activity] || false;
+            activityCheckbox.checked = getActivityState(teacher, activity) || false;
             if (activityCheckbox.checked) completedCount++;
 
             activityCheckbox.addEventListener("change", async function () {
               try { if (typeof window.isAdminUser === 'function' && !window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser)||null)) { this.checked = !this.checked; showNotification('Solo administradores pueden editar', 'error'); return; } } catch(_) {}
-              teacher.activities[activity] = this.checked;
+              setActivityState(teacher, activity, this.checked);
               try {
                 showLoading("Actualizando actividad...");
                 const colIndex = activities.indexOf(activity);
@@ -2581,7 +2596,7 @@
               renderActivitiesPreview();
               // Update progress cell
               const newCompletedCount = activities.filter(
-                (act) => teacher.activities[act]
+                (act) => getActivityState(teacher, act)
               ).length;
               const progressPercent = (
                 (newCompletedCount / activities.length) *
@@ -2606,7 +2621,7 @@
           const progressCell = document.createElement("td");
           progressCell.className = "px-6 py-4 whitespace-nowrap progress-cell";
           const progressPercent = (
-            (completedCount / activities.length) *
+            (completedCount / (activities.length || 1)) *
             100
           ).toFixed(1);
           progressCell.innerHTML = `
@@ -2663,7 +2678,7 @@
 
         teachers.forEach((teacher) => {
           activities.forEach((activity) => {
-            if (teacher.activities[activity]) {
+            if (getActivityState(teacher, activity)) {
               totalCompletedActivities++;
             }
             totalPossibleActivities++;
@@ -2706,6 +2721,27 @@
         const noChartsMessage = document.getElementById("noChartsMessage");
 
         if (teachers.length === 0 || activities.length === 0) {
+          // Build admin hint if there are no activities
+          let isAdmin = false;
+          try {
+            isAdmin = (typeof window.isAdminUser === 'function') && window.isAdminUser((firebase && firebase.auth && firebase.auth().currentUser) || null);
+          } catch (e) { isAdmin = false; }
+          if (activities.length === 0) {
+            if (isAdmin) {
+              noChartsMessage.innerHTML = `
+                <div class="text-sm text-gray-700">
+                  <p class="mb-2">No hay actividades configuradas.</p>
+                  <div class="flex items-center gap-2 justify-center">
+                    <button id="openAdminFromHint" class="px-3 py-1 bg-primary-600 text-white rounded text-xs hover:bg-primary-700">Abrir panel admin</button>
+                    <button id="seedDemoFromHint" class="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs border hover:bg-gray-200">Cargar datos de prueba</button>
+                  </div>
+                </div>`;
+            } else {
+              noChartsMessage.innerHTML = `<div class="text-sm text-gray-500">Sin datos para mostrar.</div>`;
+            }
+          } else {
+            noChartsMessage.innerHTML = `<div class="text-sm text-gray-500">Sin datos para mostrar.</div>`;
+          }
           noChartsMessage.classList.remove("hidden");
           document
             .getElementById("individualChartsContainer")
@@ -2713,6 +2749,26 @@
           document
             .getElementById("generalChartContainer")
             .classList.add("hidden");
+          // Bind hint buttons if present
+          try {
+            const openBtn = document.getElementById('openAdminFromHint');
+            if (openBtn) openBtn.addEventListener('click', function(){
+              const panel = document.getElementById('adminPanel');
+              if (panel) { panel.classList.remove('hidden'); panel.classList.add('flex'); }
+            });
+            const seedBtn = document.getElementById('seedDemoFromHint');
+            if (seedBtn) seedBtn.addEventListener('click', async function(){
+              try {
+                if (!window.api || typeof api.seedDemoData !== 'function') return;
+                if (typeof showLoading === 'function') showLoading('Cargando datos de prueba...');
+                await api.seedDemoData();
+                await initializeApp();
+                if (typeof showNotification === 'function') showNotification('Datos de prueba cargados', 'success');
+              } catch (e) {
+                console.warn(e);
+              } finally { if (typeof hideLoading === 'function') hideLoading(); }
+            });
+          } catch (e) {}
           return;
         }
 
