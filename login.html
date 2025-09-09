@@ -211,6 +211,48 @@
   </head>
 
   <body class="bg-gray-50 min-h-screen">
+    <!-- Global Loading Modal -->
+    <div
+      id="globalLoadingModal"
+      class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-40"
+      style="z-index: 9999;"
+    >
+      <div class="bg-white rounded-xl shadow-2xl p-6 flex items-center space-x-4">
+        <div class="loading-spinner"></div>
+        <div>
+          <div id="globalLoadingText" class="text-gray-900 font-medium">
+            Procesando...
+          </div>
+          <div class="text-gray-500 text-sm">Por favor espera un momento.</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Simple global loading helpers
+      function showLoading(message) {
+        try {
+          const modal = document.getElementById("globalLoadingModal");
+          const text = document.getElementById("globalLoadingText");
+          if (text && typeof message === "string" && message.trim()) {
+            text.textContent = message;
+          }
+          if (modal) {
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+          }
+        } catch (e) { /* no-op */ }
+      }
+      function hideLoading() {
+        try {
+          const modal = document.getElementById("globalLoadingModal");
+          if (modal) {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+          }
+        } catch (e) { /* no-op */ }
+      }
+    </script>
     <!-- Login Page -->
     <div
       id="loginPage"
@@ -535,13 +577,7 @@
                   <i class="fas fa-tasks text-xl"></i>
                   <span class="text-sm font-medium">Actividades</span>
                 </button>
-                <button
-                  onclick="deleteSelected(); closeMobileMenu();"
-                  class="bg-red-50 hover:bg-red-100 text-red-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
-                >
-                  <i class="fas fa-trash-alt text-xl"></i>
-                  <span class="text-sm font-medium">Eliminar</span>
-                </button>
+                
               </div>
           </div>
 
@@ -737,12 +773,7 @@
                     >
                       <i class="fas fa-tasks mr-2"></i>Actividades
                     </button>
-                    <button
-                      onclick="deleteSelected()"
-                      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      <i class="fas fa-trash mr-2"></i>Eliminar
-                    </button>
+                    
                   </div>
                 </div>
 
@@ -833,12 +864,20 @@
                   Vista completa de todos los docentes
                 </p>
               </div>
-              <button
-                onclick="showSection('dashboard')"
-                class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
-              >
-                <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
-              </button>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  onclick="deleteSelected()"
+                  class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <i class="fas fa-trash mr-2"></i>Eliminar seleccionados
+                </button>
+                <button
+                  onclick="showSection('dashboard')"
+                  class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
+                </button>
+              </div>
             </div>
             <div class="flex flex-col gap-6">
               <div class="flex flex-wrap items-center gap-3">
@@ -1560,6 +1599,7 @@
       // Initialize the application
       async function initializeApp() {
         try {
+          showLoading("Cargando datos...");
           const resp = await api.getPagedData(1, 1000);
           if (!resp || resp.success === false) {
             console.error('getPagedData failed', resp && resp.message);
@@ -1605,7 +1645,7 @@
           } else {
             showNotification("Error al cargar datos de Sheets", "error");
           }
-        }
+        } finally { hideLoading(); }
       }
 
       // Auto-refresh configuration
@@ -1689,6 +1729,7 @@
         ensureRefreshIndicatorUI();
         autoRefreshTimer = setInterval(async () => {
           try {
+            showLoading("Actualizando datos...");
             const resp = await api.getPagedData(1, 1000);
             if (!resp || resp.success === false) throw new Error(resp && resp.message ? resp.message : 'No se pudo obtener datos');
             const mapped = mapPagedResponseToModel(resp);
@@ -1704,6 +1745,8 @@
               stopAutoRefresh();
               notifySessionExpired();
             }
+          } finally {
+            hideLoading();
           }
         }, REFRESH_INTERVAL_MS);
       }
@@ -2033,6 +2076,7 @@
             activityCheckbox.addEventListener("change", async function () {
               teacher.activities[activity] = this.checked;
               try {
+                showLoading("Actualizando actividad...");
                 const colIndex = activities.indexOf(activity);
                 if (teacher.originalIndex !== undefined && colIndex >= 0) {
                   await api.updateCheckboxState(
@@ -2044,7 +2088,7 @@
               } catch (e) {
                 console.error("Error actualizando checkbox:", e);
                 showNotification("No se pudo guardar el cambio", "error");
-              }
+              } finally { hideLoading(); }
               updateStats();
               updateCharts();
               // Update progress cell
@@ -2515,6 +2559,7 @@
         if (hasErrors) return;
 
         try {
+          showLoading("Agregando docente...");
           const r = await api.addOrUpdateTeacher(id, name, lastName);
           if (!r || r.success === false)
             throw new Error(r && r.message ? r.message : "Error");
@@ -2524,7 +2569,7 @@
         } catch (e) {
           console.error(e);
           showNotification("No se pudo agregar el docente", "error");
-        }
+        } finally { hideLoading(); }
       }
 
       // Edit teacher
@@ -2593,6 +2638,7 @@
         if (hasErrors) return;
 
         try {
+          showLoading("Actualizando docente...");
           const teacher = filteredTeachers[currentEditIndex];
           const originalIndex = teacher && teacher.originalIndex;
           const r = await api.updateTeacherData(
@@ -2610,7 +2656,7 @@
         } catch (e) {
           console.error(e);
           showNotification("No se pudo actualizar", "error");
-        }
+        } finally { hideLoading(); }
       }
 
       // Reset add modal
@@ -2978,6 +3024,7 @@
       async function deleteTeacher(index) {
         if (confirm("¿Estás seguro de que deseas eliminar este docente?")) {
           try {
+            showLoading("Eliminando docente...");
             const t = filteredTeachers[index];
             const r = await api.deleteMultipleTeachers([t.originalIndex]);
             if (!r || r.success === false)
@@ -2987,7 +3034,7 @@
           } catch (e) {
             console.error(e);
             showNotification("No se pudo eliminar", "error");
-          }
+          } finally { hideLoading(); }
         }
       }
 
@@ -3008,6 +3055,7 @@
           )
         ) {
           try {
+            showLoading("Eliminando docentes...");
             const indicesToDelete = Array.from(selectedCheckboxes).map((cb) =>
               parseInt(cb.dataset.index)
             );
@@ -3025,7 +3073,7 @@
           } catch (e) {
             console.error(e);
             showNotification("No se pudieron eliminar", "error");
-          }
+          } finally { hideLoading(); }
         }
       }
     </script>
