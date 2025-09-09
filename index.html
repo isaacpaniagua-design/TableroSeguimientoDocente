@@ -112,6 +112,49 @@
   </head>
 
   <body class="bg-gray-50 min-h-screen">
+    <!-- Global Loading Modal -->
+    <div
+      id="globalLoadingModal"
+      class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-40"
+      style="z-index: 9999;"
+    >
+      <div class="bg-white rounded-xl shadow-2xl p-6 flex items-center space-x-4">
+        <div class="loading-spinner"></div>
+        <div>
+          <div id="globalLoadingText" class="text-gray-900 font-medium">
+            Procesando...
+          </div>
+          <div class="text-gray-500 text-sm">Por favor espera un momento.</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Simple global loading helpers
+      function showLoading(message) {
+        try {
+          const modal = document.getElementById("globalLoadingModal");
+          const text = document.getElementById("globalLoadingText");
+          if (text && typeof message === "string" && message.trim()) {
+            text.textContent = message;
+          }
+          if (modal) {
+            modal.classList.remove("hidden");
+            // ensure flex centering when shown
+            modal.classList.add("flex");
+          }
+        } catch (e) { console.warn("showLoading error", e); }
+      }
+      function hideLoading() {
+        try {
+          const modal = document.getElementById("globalLoadingModal");
+          if (modal) {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+          }
+        } catch (e) { console.warn("hideLoading error", e); }
+      }
+    </script>
     <!-- Navigation Header -->
     <nav
       class="bg-gradient-to-r from-primary-600 to-primary-500 shadow-lg relative z-50"
@@ -1218,12 +1261,15 @@
             activityCheckbox.addEventListener("change", async function () {
               teacher.activities[activity] = this.checked;
               try {
+                showLoading("Actualizando actividad...");
                 const colIndex = activities.indexOf(activity);
                 if (teacher.originalIndex !== undefined && colIndex >= 0) {
                   await api.updateCheckboxState(teacher.originalIndex, colIndex, this.checked);
                 }
               } catch (e) {
                 console.error("Error actualizando checkbox:", e);
+              } finally {
+                hideLoading();
               }
               updateStats();
               updateCharts();
@@ -2093,11 +2139,13 @@
         clearErrors && clearErrors();
         if (!id || !name || !lastName) return;
         try {
+          showLoading("Agregando docente...");
           const r = await api.addOrUpdateTeacher(id, name, lastName);
           if (!r || r.success === false) throw new Error(r && r.message ? r.message : "Error");
           closeAddModal && closeAddModal();
           await initializeApp();
         } catch (e) { console.error(e); }
+        finally { hideLoading(); }
       }
 
       async function updateTeacher() {
@@ -2105,6 +2153,7 @@
         const name = document.getElementById("newTeacherName").value.trim();
         const lastName = document.getElementById("newTeacherLastName").value.trim();
         try {
+          showLoading("Actualizando docente...");
           const teacher = filteredTeachers[currentEditIndex];
           const originalIndex = teacher && teacher.originalIndex;
           const r = await api.updateTeacherData(originalIndex, id, name, lastName);
@@ -2113,6 +2162,7 @@
           resetAddModal && resetAddModal();
           await initializeApp();
         } catch (e) { console.error(e); }
+        finally { hideLoading(); }
       }
 
       async function deleteTeacher(index) {

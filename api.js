@@ -71,6 +71,18 @@ function gasRequest(action, params = {}) {
   });
 }
 
+// Optional loader wrapper: uses global showLoading/hideLoading if available
+async function callWithLoader(message, fn) {
+  const hasShow = typeof window !== "undefined" && typeof window.showLoading === "function";
+  const hasHide = typeof window !== "undefined" && typeof window.hideLoading === "function";
+  try {
+    if (hasShow) window.showLoading(message);
+    return await fn();
+  } finally {
+    if (hasHide) window.hideLoading();
+  }
+}
+
 // High-level API wrappers
 const api = {
   getPagedData: (page = 1, pageSize = 1000) =>
@@ -83,10 +95,14 @@ const api = {
     gasRequest("updateTeacherData", { originalIndex, id, name, lastName }),
   updateCheckboxState: (originalIndex, colIndex, value) =>
     gasRequest("updateCheckboxState", { originalIndex, colIndex, value }),
-  deleteMultipleTeachers: (originalIndices) =>
-    gasRequest("deleteMultipleTeachers", { originalIndices }),
-  updateActivityHeaders: (headers) =>
-    gasRequest("updateActivityHeaders", { headers }),
+  deleteMultipleTeachers: async (originalIndices) =>
+    callWithLoader("Eliminando docentes...", () =>
+      gasRequest("deleteMultipleTeachers", { originalIndices })
+    ),
+  updateActivityHeaders: async (headers) =>
+    callWithLoader("Guardando actividades...", () =>
+      gasRequest("updateActivityHeaders", { headers })
+    ),
   // Subjects (Materias)
   getTeacherSubjects: (id) => gasRequest("getTeacherSubjects", { id }),
   setTeacherSubjects: (id, subjects) =>
