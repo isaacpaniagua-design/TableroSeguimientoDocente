@@ -329,13 +329,7 @@
               <i class="fas fa-file-pdf text-xl"></i>
               <span class="text-sm font-medium">Generar PDF</span>
             </button>
-            <button
-              onclick="deleteSelected(); closeMobileMenu();"
-              class="bg-red-50 hover:bg-red-100 text-red-700 p-4 rounded-lg transition-colors flex flex-col items-center space-y-2"
-            >
-              <i class="fas fa-trash-alt text-xl"></i>
-              <span class="text-sm font-medium">Eliminar</span>
-            </button>
+            
           </div>
         </div>
 
@@ -530,12 +524,7 @@
                   >
                     <i class="fas fa-tasks mr-2"></i>Actividades
                   </button>
-                  <button
-                    onclick="deleteSelected()"
-                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <i class="fas fa-trash mr-2"></i>Eliminar
-                  </button>
+                  
                 </div>
               </div>
 
@@ -672,12 +661,20 @@
                 Vista completa de todos los docentes
               </p>
             </div>
-            <button
-              onclick="showSection('dashboard')"
-              class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button
+                onclick="deleteSelected()"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <i class="fas fa-trash mr-2"></i>Eliminar seleccionados
+              </button>
+              <button
+                onclick="showSection('dashboard')"
+                class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                <i class="fas fa-arrow-left mr-2"></i>Volver al Dashboard
+              </button>
+            </div>
           </div>
           <div class="text-center py-16">
             <i class="fas fa-users text-gray-300 text-6xl mb-4"></i>
@@ -1051,6 +1048,7 @@
       // Initialize the application
       async function initializeApp() {
         try {
+          showLoading("Cargando datos...");
           const resp = await api.getPagedData(1, 1000);
           const mapped = mapPagedResponseToModel(resp);
           teachers = mapped.teachers;
@@ -1074,7 +1072,7 @@
           console.error("Error cargando datos:", err);
           document.getElementById("loadingState").classList.add("hidden");
           document.getElementById("emptyState").classList.remove("hidden");
-        }
+        } finally { hideLoading(); }
       }
 
       // Auto-refresh configuration
@@ -1139,6 +1137,7 @@
         ensureRefreshIndicatorUI();
         autoRefreshTimer = setInterval(async () => {
           try {
+            showLoading("Actualizando datos...");
             const resp = await api.getPagedData(1, 1000);
             const mapped = mapPagedResponseToModel(resp);
             teachers = mapped.teachers;
@@ -1150,6 +1149,8 @@
             setLastRefreshNow();
           } catch (e) {
             console.error("Auto-refresh error:", e);
+          } finally {
+            hideLoading();
           }
         }, REFRESH_INTERVAL_MS);
       }
