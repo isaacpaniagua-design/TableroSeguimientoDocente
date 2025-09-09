@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -69,10 +69,7 @@
       if (typeof window !== 'undefined') {
         try {
           window.initiateGoogleSignIn = initiateGoogleSignIn;
-          window.demoLogin = demoLogin;
-          window.handleCredentialResponse = handleCredentialResponse;
-          window.initializeGoogleSignIn = initializeGoogleSignIn;
-        } catch (e) {
+          } catch (e) {
           console && console.warn && console.warn('Function export error:', e);
         }
       }
@@ -338,6 +335,9 @@
             <button id="adminActionRecheck" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
               <i class="fa-solid fa-stethoscope mr-1"></i> Reprobar Health Check
             </button>
+            <button id="adminActionSeed" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
+              <i class="fa-solid fa-seedling mr-1"></i> Cargar datos de prueba
+            </button>
             <button id="adminActionSignOut" class="px-3 py-2 bg-red-50 rounded hover:bg-red-100 text-red-700 text-sm">
               <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar sesión
             </button>
@@ -377,6 +377,20 @@
           if (aRefresh) aRefresh.addEventListener('click', function(){ try { if (typeof initializeApp === 'function') initializeApp(); } catch(e) {} });
           var aExport = qs('adminActionExport');
           if (aExport) aExport.addEventListener('click', function(){ try { if (window.exportTeachersReport) exportTeachersReport(); else alert('Export no disponible'); } catch(e) { alert('Error al exportar'); } });
+          var aSeed = qs('adminActionSeed');
+          if (aSeed) aSeed.addEventListener('click', async function(){
+            try {
+              if (!window.api || typeof api.seedDemoData !== 'function') { alert('Seed no disponible'); return; }
+              if (!confirm('Esto creará/actualizará datos de prueba (5 docentes y actividades). ¿Continuar?')) return;
+              if (typeof showLoading === 'function') showLoading('Cargando datos de prueba...');
+              var r = await api.seedDemoData();
+              if (typeof initializeApp === 'function') initializeApp();
+              if (typeof showNotification === 'function') showNotification('Datos de prueba cargados ('+(r && r.seeded || 0)+')', 'success');
+            } catch (e) {
+              console.error(e);
+              alert('Error al cargar datos de prueba');
+            } finally { if (typeof hideLoading === 'function') hideLoading(); }
+          });
           var aSignOut = qs('adminActionSignOut');
           if (aSignOut) aSignOut.addEventListener('click', function(){ try { if (typeof logout === 'function') logout(); else if (window.firebase && firebase.auth) firebase.auth().signOut(); } catch(e) {} });
         }

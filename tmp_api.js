@@ -1,4 +1,14 @@
-// Optional: persist an auth token in sessionStorage (used by UI helpers)
+// Apps Script Web App URL (exec). Replace with your deployment URL
+// Example: https://script.google.com/macros/s/AKfycbx.../exec
+const WEB_APP_URL =
+  "https://script.google.com/macros/s/AKfycbys5tkzAYOJdrjoSITBUDm2rkypN4OW34IHyDYBEzSMkChcHUukKyog7a3a5MypPFYLdw/exec";
+let __AUTH_ID_TOKEN = null;
+try {
+  const saved =
+    typeof sessionStorage !== "undefined" && sessionStorage.getItem("ID_TOKEN");
+  if (saved) __AUTH_ID_TOKEN = saved;
+} catch (e) {}
+
 function setAuthToken(idToken) {
   __AUTH_ID_TOKEN = idToken || null;
   try {
@@ -8,6 +18,57 @@ function setAuthToken(idToken) {
       sessionStorage.removeItem("ID_TOKEN");
     }
   } catch (e) {}
+}
+
+// JSONP request helper for Apps Script (avoids CORS limits)
+function gasRequest(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    if (!WEB_APP_URL || WEB_APP_URL.startsWith("REEMPLAZA_")) {
+      reject(new Error("Configura WEB_APP_URL en api.js"));
+      return;
+    }
+
+    const callbackName = `__gas_cb_${Date.now()}_${Math.floor(
+      Math.random() * 1e6
+    )}`;
+    const script = document.createElement("script");
+    const url = new URL(WEB_APP_URL);
+    url.searchParams.set("action", action);
+    url.searchParams.set("callback", callbackName);
+    if (__AUTH_ID_TOKEN) {
+      url.searchParams.set("idToken", __AUTH_ID_TOKEN);
+    }
+    Object.keys(params || {}).forEach((k) => {
+      const v = params[k];
+      if (Array.isArray(v) || typeof v === "object") {
+        url.searchParams.set(k, JSON.stringify(v));
+      } else {
+        url.searchParams.set(k, String(v));
+      }
+    });
+
+    const cleanup = () => {
+      try {
+        delete window[callbackName];
+      } catch (e) {
+        window[callbackName] = undefined;
+      }
+      if (script && script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      resolve(payload);
+    };
+
+    script.onerror = (err) => {
+      cleanup();
+      reject(err);
+    };
+
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
 }
 
 // Optional loader wrapper: uses global showLoading/hideLoading if available
@@ -30,6 +91,35 @@ function emitChange(op, detail) {
   } catch (e) {}
 }
 
+// High-level API wrappers (DISABLED: Apps Script no longer used)
+const __GAS_API_DISABLED = {
+  getPagedData: (page = 1, pageSize = 1000) =>
+    gasRequest("getPagedData", { page, pageSize }),
+  getDashboardStatistics: () => gasRequest("getDashboardStatistics"),
+  getAllTeachersForReport: () => gasRequest("getAllTeachersForReport"),
+  addOrUpdateTeacher: (id, name, lastName) =>
+    gasRequest("addOrUpdateTeacher", { id, name, lastName }),
+  updateTeacherData: (originalIndex, id, name, lastName) =>
+    gasRequest("updateTeacherData", { originalIndex, id, name, lastName }),
+  updateCheckboxState: (originalIndex, colIndex, value) =>
+    gasRequest("updateCheckboxState", { originalIndex, colIndex, value }),
+  deleteMultipleTeachers: async (originalIndices) =>
+    callWithLoader("Eliminando docentes...", () =>
+      gasRequest("deleteMultipleTeachers", { originalIndices })
+    ),
+  updateActivityHeaders: async (headers) =>
+    callWithLoader("Guardando actividades...", () =>
+      gasRequest("updateActivityHeaders", { headers })
+    ),
+  // Subjects (Materias)
+  getTeacherSubjects: (id) => gasRequest("getTeacherSubjects", { id }),
+  setTeacherSubjects: (id, subjects) =>
+    gasRequest("setTeacherSubjects", { id, subjects }),
+  listAllSubjects: () => gasRequest("listAllSubjects", {}),
+  // Bulk ops for import
+  bulkAddOrUpdateTeachers: (rows) => gasRequest("bulkAddOrUpdateTeachers", { rows }),
+  bulkSetSubjects: (items) => gasRequest("bulkSetSubjects", { items }),
+};
 
 // Utility to map Apps Script teacher rows to UI model
 function mapPagedResponseToModel(resp) {
@@ -187,39 +277,8 @@ window.setAuthToken = setAuthToken;
       await batch.commit();
       emitChange('teacher:bulkSetSubjects', { count: (items||[]).length });
       return { success:true };
-    },
-    seedDemoData: async function(){
-      var fb = ensureFB();
-      // Demo activities
-      var activities = [
-        'Planificación de clases',
-        'Evaluación de estudiantes',
-        'Reuniones de padres',
-        'Capacitación docente',
-        'Elaboración de materiales'
-      ];
-      await fb.db.collection('settings').doc('activities').set({ headers: activities, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
-      // Demo teachers
-      var teachers = [
-        { id:'DOC001', name:'Ana', lastName:'García López', activities:{ 'Planificación de clases':true, 'Evaluación de estudiantes':true, 'Reuniones de padres':false, 'Capacitación docente':true, 'Elaboración de materiales':false }, subjects:['Matemáticas I','Álgebra'] },
-        { id:'DOC002', name:'Carlos', lastName:'Rodríguez Martín', activities:{ 'Planificación de clases':true, 'Evaluación de estudiantes':false, 'Reuniones de padres':true, 'Capacitación docente':false, 'Elaboración de materiales':true }, subjects:['Español','Literatura'] },
-        { id:'DOC003', name:'María', lastName:'Hernández Pérez', activities:{ 'Planificación de clases':false, 'Evaluación de estudiantes':true, 'Reuniones de padres':true, 'Capacitación docente':true, 'Elaboración de materiales':false }, subjects:['Historia','Cívica'] },
-        { id:'DOC004', name:'Luis', lastName:'Sánchez Díaz', activities:{ 'Planificación de clases':true, 'Evaluación de estudiantes':true, 'Reuniones de padres':true, 'Capacitación docente':false, 'Elaboración de materiales':false }, subjects:['Física','Cálculo'] },
-        { id:'DOC005', name:'Elena', lastName:'Torres Gómez', activities:{ 'Planificación de clases':false, 'Evaluación de estudiantes':false, 'Reuniones de padres':true, 'Capacitación docente':true, 'Elaboración de materiales':true }, subjects:['Química','Biología'] },
-      ];
-      var batch = fb.db.batch();
-      teachers.forEach(function(t){
-        var ref = fb.db.collection('teachers').doc(t.id);
-        batch.set(ref, { id:t.id, name:t.name, lastName:t.lastName, activities:t.activities, subjects:t.subjects, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
-      });
-      await batch.commit();
-      emitChange('seed:demo', { count: teachers.length });
-      return { success:true, seeded: teachers.length };
     }
   };
+  // Expose global identifier `api` to point to Firestore client API
+  try { api = window.api; } catch (e) {}
 })();
-
-// Ensure a global `api` identifier exists for scripts that reference it
-try { if (typeof window !== 'undefined') { window.api = window.api || {}; } } catch (e) {}
-// Declare global var binding so `api` is defined
-var api = (typeof window !== 'undefined' && window.api) ? window.api : {};
