@@ -1600,7 +1600,11 @@
           console.error("Error cargando datos:", err);
           document.getElementById("loadingState").classList.add("hidden");
           document.getElementById("emptyState").classList.remove("hidden");
-          showNotification("Error al cargar datos de Sheets", "error");
+          if (isAuthError(err)) {
+            notifySessionExpired();
+          } else {
+            showNotification("Error al cargar datos de Sheets", "error");
+          }
         }
       }
 
@@ -1696,8 +1700,42 @@
             setLastRefreshNow();
           } catch (e) {
             console.error("Auto-refresh error:", e);
+            if (isAuthError(e)) {
+              stopAutoRefresh();
+              notifySessionExpired();
+            }
           }
         }, REFRESH_INTERVAL_MS);
+      }
+
+      // ===== Manejo de sesión/autenticación =====
+      function isAuthError(err) {
+        const msg = String((err && err.message) || err || '').toLowerCase();
+        return (
+          msg.includes('no autorizado') ||
+          msg.includes('token inválido') ||
+          msg.includes('token invalido') ||
+          msg.includes('token expirado') ||
+          msg.includes('aud inválido') ||
+          msg.includes('iss inválido')
+        );
+      }
+      function notifySessionExpired() {
+        showNotification('Tu sesión ha expirado o es inválida. Inicia sesión nuevamente.', 'error');
+        try {
+          if (window.setAuthToken) window.setAuthToken(null);
+          else if (window.api && window.api.setAuthToken) window.api.setAuthToken(null);
+        } catch (e) {}
+        try { stopAutoRefresh && stopAutoRefresh(); } catch(e) {}
+        try {
+          document.getElementById('mainDashboard').classList.add('hidden');
+          document.getElementById('loginPage').classList.remove('hidden');
+        } catch (e) {}
+        try {
+          if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+            google.accounts.id.prompt();
+          }
+        } catch (e) {}
       }
 
       function stopAutoRefresh() {
