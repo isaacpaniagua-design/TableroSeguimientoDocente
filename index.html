@@ -505,6 +505,17 @@
       (function(){
         function qs(id){ return document.getElementById(id); }
         function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+        function storeOAuthIdTokenFromCredential(cred){
+          try {
+            if (cred && cred.idToken) {
+              if (typeof setAuthToken === 'function') setAuthToken(cred.idToken);
+              else if (window.api && typeof window.api.setAuthToken === 'function') window.api.setAuthToken(cred.idToken);
+              window.__lastAuthTokenType = 'google_oauth';
+              return true;
+            }
+          } catch(e) {}
+          return false;
+        }
         async function redirectGoogleSignIn(){
           try {
             if (!window.firebase || !firebase.auth) throw new Error('Firebase Auth no disponible');
@@ -521,7 +532,8 @@
             if (!window.firebase || !firebase.auth) throw new Error('Firebase Auth no disponible');
             var provider = new firebase.auth.GoogleAuthProvider();
             try {
-              await firebase.auth().signInWithPopup(provider);
+              var res = await firebase.auth().signInWithPopup(provider);
+              try { var cred = firebase.auth.GoogleAuthProvider.credentialFromResult(res); storeOAuthIdTokenFromCredential(cred); } catch(_) {}
             } catch (err) {
               if (
                 (err && err.code && (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user')) ||
@@ -545,30 +557,38 @@
           window.redirectGoogleSignIn = redirectGoogleSignIn;
           window.robustGoogleSignIn = robustGoogleSignIn;
         }
-        function update(){
+        async function update(){
           try {
             var user = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null;
             toggle(qs('loginFab'), !user);
           } catch (e) {}
         }
-        function init(){ bind(); update(); try { if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(function(){ update(); }); } catch(e) {} }
+        async function init(){
+          bind();
+          // Captura resultado de redirect y toma el Google ID token si viene
+          try {
+            if (window.firebase && firebase.auth && typeof firebase.auth().getRedirectResult === 'function') {
+              var result = await firebase.auth().getRedirectResult();
+              try {
+                var cred = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+                storeOAuthIdTokenFromCredential(cred);
+              } catch(_) {}
+            }
+          } catch(_) {}
+          update();
+          try { if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(function(){ update(); }); } catch(e) {}
+        }
         if (document.readyState === 'complete') init(); else window.addEventListener('load', init);
       })();
     </script>
 
     <script>
-      // Bridge Firebase Auth -> UI (login/dashboard) for admins y usuarios
+      // Bridge Firebase Auth -> UI (login/dashboard) para admins y usuarios
       (function(){
         function qs(id){ return document.getElementById(id); }
         function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
-        async function setBackendToken(user){
-          try {
-            if (!user || !user.getIdToken) return;
-            var t = await user.getIdToken(false);
-            if (typeof setAuthToken === 'function') setAuthToken(t);
-            else if (window.api && typeof window.api.setAuthToken === 'function') window.api.setAuthToken(t);
-          } catch(e) {}
-        }
+        // El backend espera un Google ID Token (aud = cliente OAuth), no el Firebase ID token.
+        // Por eso, no pasamos getIdToken() aquí. Ese token se captura en el flujo de login (popup/redirect) y se guarda vía setAuthToken().
         function mapUser(u){
           if (!u) return null;
           var email = u.email || '';
@@ -592,7 +612,7 @@
             toggle(qs('loginPage'), !isLogged);
             toggle(qs('mainDashboard'), !!isLogged);
             if (isLogged) {
-              await setBackendToken(u);
+              // Token ya se guardó si venimos de popup/redirect. Si no hay token, evitamos enviar uno inválido al backend.
               if (typeof initializeApp === 'function') initializeApp();
               if (typeof startAutoRefresh === 'function') startAutoRefresh();
             }

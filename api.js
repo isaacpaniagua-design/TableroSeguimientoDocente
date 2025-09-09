@@ -91,8 +91,8 @@ function emitChange(op, detail) {
   } catch (e) {}
 }
 
-// High-level API wrappers
-const api = {
+// High-level API wrappers (DISABLED: Apps Script no longer used)
+const __GAS_API_DISABLED = {
   getPagedData: (page = 1, pageSize = 1000) =>
     gasRequest("getPagedData", { page, pageSize }),
   getDashboardStatistics: () => gasRequest("getDashboardStatistics"),
@@ -279,4 +279,6 @@ window.setAuthToken = setAuthToken;
       return { success:true };
     }
   };
+  // Expose global identifier `api` to point to Firestore client API
+  try { api = window.api; } catch (e) {}
 })();
