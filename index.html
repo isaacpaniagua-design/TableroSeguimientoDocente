@@ -298,6 +298,82 @@
       }
     </script>
 
+    <!-- Admin Access FAB + Panel -->
+    <div id="adminFab" class="fixed bottom-4 left-4 hidden z-40">
+      <button id="adminFabBtn" class="px-4 py-2 rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+        <i class="fa-solid fa-user-shield mr-2"></i> Entrar como admin
+      </button>
+    </div>
+
+    <div id="adminPanel" class="fixed inset-0 hidden z-50">
+      <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+      <div class="relative mx-auto mt-20 w-11/12 max-w-2xl bg-white rounded-xl shadow-2xl">
+        <div class="flex items-center justify-between p-4 border-b">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-user-shield text-primary-600"></i>
+            <h3 class="text-lg font-semibold text-gray-800">Panel de administración</h3>
+          </div>
+          <button id="adminCloseBtn" class="text-gray-400 hover:text-gray-600" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="p-4 space-y-4">
+          <p class="text-sm text-gray-600">Acceso concedido a administradores. Las operaciones de escritura están protegidas por reglas de Firestore.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button id="adminActionRefresh" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
+              <i class="fa-solid fa-rotate mr-1"></i> Refrescar datos
+            </button>
+            <button id="adminActionExport" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
+              <i class="fa-solid fa-file-export mr-1"></i> Exportar (placeholder)
+            </button>
+            <button id="adminActionRecheck" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-800 text-sm">
+              <i class="fa-solid fa-stethoscope mr-1"></i> Reprobar Health Check
+            </button>
+            <button id="adminActionSignOut" class="px-3 py-2 bg-red-50 rounded hover:bg-red-100 text-red-700 text-sm">
+              <i class="fa-solid fa-right-from-bracket mr-1"></i> Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        var ADMIN_EMAILS = [
+          "isaac.paniagua@potros.itson.edu.mx",
+          "saul.grijalva62125@potros.itson.edu.mx",
+          "ricardo.carrasco20122@potros.itson.edu.mx"
+        ];
+        function isAdminUser(user){
+          try { return !!(user && user.email && ADMIN_EMAILS.indexOf(user.email) !== -1); } catch(e){ return false; }
+        }
+        function qs(id){ return document.getElementById(id); }
+        function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+        function updateAdminUI(user){
+          var showAdmin = isAdminUser(user);
+          toggle(qs('adminFab'), showAdmin);
+          if (!showAdmin) toggle(qs('adminPanel'), false);
+        }
+        function bind(){
+          var fabBtn = qs('adminFabBtn');
+          var panel = qs('adminPanel');
+          var closeBtn = qs('adminCloseBtn');
+          if (fabBtn) fabBtn.addEventListener('click', function(){ toggle(panel, true); });
+          if (closeBtn) closeBtn.addEventListener('click', function(){ toggle(panel, false); });
+          if (panel) panel.addEventListener('click', function(e){ if (e.target === panel) toggle(panel, false); });
+
+          var aRecheck = qs('adminActionRecheck');
+          if (aRecheck) aRecheck.addEventListener('click', function(){ try { if (window.runHealthCheck) runHealthCheck(); } catch(e) {} });
+          var aRefresh = qs('adminActionRefresh');
+          if (aRefresh) aRefresh.addEventListener('click', function(){ try { if (typeof initializeApp === 'function') initializeApp(); } catch(e) {} });
+          var aExport = qs('adminActionExport');
+          if (aExport) aExport.addEventListener('click', function(){ alert('Exportar: pendiente de implementar'); });
+          var aSignOut = qs('adminActionSignOut');
+          if (aSignOut) aSignOut.addEventListener('click', function(){ try { if (typeof logout === 'function') logout(); else if (window.firebase && firebase.auth) firebase.auth().signOut(); } catch(e) {} });
+        }
+        function init(){ bind(); try { if (window.firebase && firebase.auth) { firebase.auth().onAuthStateChanged(updateAdminUI); updateAdminUI(firebase.auth().currentUser); } } catch(e) {}}
+        if (document.readyState === 'complete') init(); else window.addEventListener('load', init);
+      })();
+    </script>
+
     <!-- Health Check minimal (Firebase) -->
     <div id="healthCheckCard" class="fixed bottom-4 right-4 bg-white border border-gray-200 rounded-lg shadow p-3 text-sm z-50">
       <div class="flex items-center justify-between mb-2">
