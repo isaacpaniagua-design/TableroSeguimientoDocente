@@ -174,6 +174,8 @@
       .chart-type-btn:not(.active):hover {
         background-color: #e5e7eb;
       }
+      /* Oculta bloque de acceso demo no utilizado */
+      #demoAccessBlock { display: none !important; }
 
       .login-container {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -480,6 +482,18 @@
       })();
     </script>
 
+    <script>
+      // Stubs de compatibilidad: neutralizan helpers de GIS si quedaron definidos
+      (function(){
+        try { window.parseJwt = function(){ return null; }; } catch(e) {}
+        try { window.initializeGoogleSignIn = function(){}; } catch(e) {}
+        try { window.handleCredentialResponse = function(){}; } catch(e) {}
+        try { window.validateInstitutionalEmail = function(){ return true; }; } catch(e) {}
+        try { window.initiateGoogleSignIn = function(){ try { if (window.robustGoogleSignIn) robustGoogleSignIn(); } catch(e) {} }; } catch(e) {}
+        try { window.checkExistingSession = function(){}; } catch(e) {}
+      })();
+    </script>
+
     <!-- FAB de inicio de sesión con Google (redirige) -->
     <div id="loginFab" class="fixed bottom-24 right-4 hidden z-40">
       <button id="loginRedirectBtn" class="px-4 py-2 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
@@ -539,6 +553,60 @@
         }
         function init(){ bind(); update(); try { if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(function(){ update(); }); } catch(e) {} }
         if (document.readyState === 'complete') init(); else window.addEventListener('load', init);
+      })();
+    </script>
+
+    <script>
+      // Bridge Firebase Auth -> UI (login/dashboard) for admins y usuarios
+      (function(){
+        function qs(id){ return document.getElementById(id); }
+        function toggle(el, show){ if (!el) return; if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+        async function setBackendToken(user){
+          try {
+            if (!user || !user.getIdToken) return;
+            var t = await user.getIdToken(false);
+            if (typeof setAuthToken === 'function') setAuthToken(t);
+            else if (window.api && typeof window.api.setAuthToken === 'function') window.api.setAuthToken(t);
+          } catch(e) {}
+        }
+        function mapUser(u){
+          if (!u) return null;
+          var email = u.email || '';
+          return {
+            name: u.displayName || (email ? email.split('@')[0] : 'Usuario'),
+            email: email,
+            picture: u.photoURL || null,
+            domain: email.split('@')[1] || ''
+          };
+        }
+        async function applyUserToUI(u){
+          try {
+            var isLogged = !!u;
+            // Update globals for existing UI functions
+            window.currentUser = mapUser(u);
+            // Bind UI
+            if (isLogged) {
+              try { qs('userNameDisplay').textContent = window.currentUser.name; } catch(e){}
+              try { qs('userEmailDisplay').textContent = window.currentUser.email; } catch(e){}
+            }
+            toggle(qs('loginPage'), !isLogged);
+            toggle(qs('mainDashboard'), !!isLogged);
+            if (isLogged) {
+              await setBackendToken(u);
+              if (typeof initializeApp === 'function') initializeApp();
+              if (typeof startAutoRefresh === 'function') startAutoRefresh();
+            }
+          } catch (e) { console && console.warn && console.warn('Auth->UI error', e); }
+        }
+        function setup(){
+          if (window.firebase && firebase.auth) {
+            try { firebase.auth().onAuthStateChanged(applyUserToUI); } catch(e){}
+            try { applyUserToUI(firebase.auth().currentUser || null); } catch(e){}
+          }
+        }
+        if (document.readyState === 'complete') setup(); else window.addEventListener('load', setup);
+        // Expose for debugging
+        window.__applyUserToUI = applyUserToUI;
       })();
     </script>
 
@@ -1643,93 +1711,19 @@
     <script>
       // Authentication and Login Functions
       let currentUser = null;
-      const INSTITUTIONAL_DOMAINS = ["potros.itson.edu.mx", "itson.edu.mx"]; // Dominios institucionales permitidos
       const DEMO_ENABLED = false; // Oculta/bloquea el acceso demo cuando es false
 
-      // Decode Google ID token payload (Base64URL safe)
-      function parseJwt(token) {
-        try {
-          const base64Url = token.split(".")[1];
-          if (!base64Url) return null;
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-          const padded = base64.padEnd(
-            base64.length + ((4 - (base64.length % 4 || 4)) % 4),
-            "="
-          );
-          const json = decodeURIComponent(
-            atob(padded)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join("")
-          );
-          return JSON.parse(json);
-        } catch (e) {
-          return null;
-        }
-      }
+      // Decode Google ID token payload (removed)
+      function parseJwt(token) { return null; }
 
-      // Initialize Google Sign-In
-      function initializeGoogleSignIn() {
-        if (typeof google !== "undefined" && google.accounts) {
-          google.accounts.id.initialize({
-            client_id:
-              "462104222746-m1hkvicmjlj1qi7ggiliq708f9v128ko.apps.googleusercontent.com", // Replace with your actual client ID
-            callback: handleCredentialResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-          });
-        }
-      }
+      // Initialize Google Sign-In (removed)
+      function initializeGoogleSignIn() {}
 
-      // Handle Google Sign-In response
-      function handleCredentialResponse(response) {
-        showLoginLoading(true);
+      // Handle Google Sign-In response (removed)
+      function handleCredentialResponse() {}
 
-        try {
-          // Decode the JWT token (in a real app, validate this server-side)
-          const payload = parseJwt(response.credential);
-          if (!payload) throw new Error("invalid id token");
-
-          // Validate institutional domain
-          if (validateInstitutionalEmail(payload.email)) {
-            currentUser = {
-              name: payload.name,
-              email: payload.email,
-              picture: payload.picture,
-              domain: payload.email.split("@")[1],
-            };
-
-            // Guardar ID token para llamadas al backend
-            if (window.setAuthToken) {
-              window.setAuthToken(response.credential);
-            } else if (window.api && window.api.setAuthToken) {
-              window.api.setAuthToken(response.credential);
-            }
-
-            setTimeout(() => {
-              showLoginLoading(false);
-              loginSuccess();
-            }, 800);
-          } else {
-            showLoginLoading(false);
-            showLoginError(
-              "Acceso denegado. Debe usar una cuenta del dominio institucional autorizado."
-            );
-          }
-        } catch (error) {
-          showLoginLoading(false);
-          showLoginError(
-            "Error al procesar las credenciales. Intente nuevamente."
-          );
-          console.error("Login error:", error);
-        }
-      }
-
-      // Validate institutional email domain
-      function validateInstitutionalEmail(email) {
-        const domain = email.split("@")[1];
-        return INSTITUTIONAL_DOMAINS.includes(domain);
-      }
+      // Validate institutional email domain (removed)
+      function validateInstitutionalEmail(email) { return true; }
 
       // Initiate Google Sign-In
       function initiateGoogleSignIn() {
@@ -1813,6 +1807,7 @@
           if (typeof google !== "undefined" && google.accounts) {
             google.accounts.id.disableAutoSelect();
           }
+          try { if (window.firebase && firebase.auth) { firebase.auth().signOut(); } } catch (e) {}
 
           // Show login page and hide dashboard
           document.getElementById("mainDashboard").classList.add("hidden");
@@ -1854,32 +1849,8 @@
         document.getElementById("loginError").classList.add("hidden");
       }
 
-      // Check if user is already logged in (for page refresh)
-      function checkExistingSession() {
-        try {
-          const token = sessionStorage.getItem("ID_TOKEN");
-          if (!token) throw new Error("no token");
-          const payload = parseJwt(token);
-          if (!payload) throw new Error("invalid token");
-          if (!validateInstitutionalEmail(payload.email))
-            throw new Error("domain");
-          currentUser = {
-            name: payload.name,
-            email: payload.email,
-            picture: payload.picture,
-            domain: payload.hd || payload.email.split("@")[1],
-          };
-          if (window.setAuthToken) window.setAuthToken(token);
-          else if (window.api && window.api.setAuthToken)
-            window.api.setAuthToken(token);
-          // Auto-login user
-          loginSuccess();
-        } catch (e) {
-          // Show login page
-          document.getElementById("loginPage").classList.remove("hidden");
-          document.getElementById("mainDashboard").classList.add("hidden");
-        }
-      }
+      // Legacy GIS session check (removed)
+      function checkExistingSession() {}
 
       // Global variables
       let teachers = [
@@ -3336,14 +3307,9 @@
       window.addEventListener("load", function () {
         // Initialize Google Sign-In (removed)
 
-        // Check for existing session
-        checkExistingSession();
+        // Check existing session via Firebase Auth handled below
 
-        // Hide demo access if disabled
-        if (!DEMO_ENABLED) {
-          const block = document.getElementById("demoAccessBlock");
-          if (block) block.classList.add("hidden");
-        }
+        // Bloque demo eliminado/no utilizado
       });
 
       // Close mobile menu when clicking outside
@@ -3466,12 +3432,7 @@
         }
       }
     </script>
-    <script>
-      // Ensure global access to handlers after definitions
-      if (typeof window !== 'undefined') {
-        window.demoLogin = window.demoLogin || demoLogin;
-      }
-    </script>
+    
   </body>
 </html>
 
