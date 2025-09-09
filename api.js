@@ -137,3 +137,128 @@ function mapPagedResponseToModel(resp) {
 // expose globally
 window.api = api;
 window.setAuthToken = setAuthToken;
+
+// ---- Firebase integration ----
+(function(){
+  var USE_FIREBASE = true; // flip to false to fall back to Apps Script
+  if (!USE_FIREBASE) return;
+  function ensureFB(){ if (!window.__fb || !__fb.db) throw new Error('Firebase no inicializado'); return __fb; }
+  var __pageMap = { indexToId: [], activities: [] };
+  async function fbGetActivities(){
+    var fb = ensureFB();
+    try {
+      var snap = await fb.db.collection('settings').doc('activities').get();
+      var headers = (snap.exists && Array.isArray(snap.data().headers)) ? snap.data().headers : [];
+      return headers;
+    } catch(e){ return []; }
+  }
+  function normalizeTeacherDoc(d){
+    var data = d.data() || {}; var activities = data.activities || {}; var subjects = Array.isArray(data.subjects)?data.subjects:[];
+    return { id: data.id || d.id, name: data.name||'', lastName: data.lastName||'', activities: activities, subjects: subjects };
+  }
+  window.api = {
+    getPagedData: async function(page=1,pageSize=1000){
+      var fb = ensureFB();
+      var activities = await fbGetActivities();
+      var q = fb.db.collection('teachers').orderBy('lastName').limit(pageSize);
+      var snap = await q.get();
+      var docs = snap.docs.map(normalizeTeacherDoc);
+      __pageMap.indexToId = docs.map(function(t){ return t.id; });
+      __pageMap.activities = activities.slice();
+      var headers = ['Sel.','ID','Nombre','Apellidos'].concat(activities);
+      var teachers = docs.map(function(t, idx){
+        var row = { originalIndex: idx, id: t.id, name: t.name, lastName: t.lastName };
+        activities.forEach(function(h){ row[h] = !!(t.activities && t.activities[h]); });
+        return row;
+      });
+      return { success:true, teachers: teachers, headers: headers, totalTeachers: teachers.length, currentPage: 1 };
+    },
+    getDashboardStatistics: async function(){
+      var resp = await this.getPagedData(1,1000);
+      if (!resp.success) return { success:false, message:'No data' };
+      var headers = Array.isArray(resp.headers)?resp.headers:[];
+      var activityHeaders = headers.slice(4);
+      var teachers = resp.teachers||[];
+      var totalActivities = teachers.length * activityHeaders.length;
+      var completedActivities = 0;
+      var activityTotals = activityHeaders.map(function(){return 0;});
+      teachers.forEach(function(t){
+        activityHeaders.forEach(function(h, i){
+          if (t[h]) { completedActivities++; activityTotals[i]++; }
+        });
+      });
+      return { success:true, stats:{ totalActivities: totalActivities, completedActivities: completedActivities, activityTotals: activityTotals, totalTeachers: teachers.length }, activityHeaders: activityHeaders };
+    },
+    getAllTeachersForReport: async function(){
+      var fb = ensureFB();
+      var activities = await fbGetActivities();
+      var snap = await fb.db.collection('teachers').orderBy('lastName').get();
+      var rows = snap.docs.map(normalizeTeacherDoc).map(function(t){
+        var obj = { id: t.id, name: t.name, lastName: t.lastName }; activities.forEach(function(h){ obj[h] = !!(t.activities && t.activities[h]); }); return obj;
+      });
+      var headers = ['Sel.','ID','Nombre','Apellidos'].concat(activities);
+      return { success:true, teachers: rows, headers: headers };
+    },
+    addOrUpdateTeacher: async function(id,name,lastName){
+      var fb = ensureFB();
+      var activities = await fbGetActivities();
+      var acts = {}; activities.forEach(function(h){ acts[h]=false; });
+      await fb.db.collection('teachers').doc(String(id)).set({ id:String(id), name:String(name||''), lastName:String(lastName||''), activities: acts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { success:true };
+    },
+    updateTeacherData: async function(originalIndex,id,name,lastName){
+      var fb = ensureFB();
+      await fb.db.collection('teachers').doc(String(id)).set({ id:String(id), name:String(name||''), lastName:String(lastName||''), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { success:true };
+    },
+    updateCheckboxState: async function(originalIndex,colIndex,value){
+      var fb = ensureFB();
+      var id = __pageMap.indexToId[Number(originalIndex)||0];
+      var activity = __pageMap.activities[Number(colIndex)||0];
+      if (!id || !activity) return { success:false, message:'Contexto no disponible' };
+      var ref = fb.db.collection('teachers').doc(String(id));
+      var data = {}; data['activities.'+activity] = !!value; data['updatedAt'] = firebase.firestore.FieldValue.serverTimestamp();
+      await ref.update(data).catch(async function(){ await ref.set(data, { merge:true }); });
+      return { success:true };
+    },
+    deleteMultipleTeachers: async function(originalIndices){
+      var fb = ensureFB();
+      var ids = (originalIndices||[]).map(function(i){ return __pageMap.indexToId[Number(i)||0]; }).filter(Boolean);
+      var batch = fb.db.batch(); ids.forEach(function(id){ batch.delete(fb.db.collection('teachers').doc(String(id))); }); await batch.commit();
+      return { success:true };
+    },
+    updateActivityHeaders: async function(headers){
+      var fb = ensureFB();
+      await fb.db.collection('settings').doc('activities').set({ headers: Array.isArray(headers)?headers:[], updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { success:true };
+    },
+    getTeacherSubjects: async function(id){
+      var fb = ensureFB();
+      var snap = await fb.db.collection('teachers').doc(String(id)).get();
+      var arr = (snap.exists && Array.isArray((snap.data()||{}).subjects)) ? snap.data().subjects : [];
+      return { subjects: arr };
+    },
+    setTeacherSubjects: async function(id, subjects){
+      var fb = ensureFB();
+      await fb.db.collection('teachers').doc(String(id)).set({ subjects: Array.isArray(subjects)?subjects:[], updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { success:true };
+    },
+    listAllSubjects: async function(){
+      var fb = ensureFB();
+      var snap = await fb.db.collection('teachers').get();
+      var out = []; snap.docs.forEach(function(d){ var data=d.data()||{}; var subs = Array.isArray(data.subjects)?data.subjects:[]; out.push({ id: data.id || d.id, subjects: subs }); });
+      return { items: out };
+    },
+    bulkAddOrUpdateTeachers: async function(rows){
+      var fb = ensureFB(); var batch = fb.db.batch();
+      var activities = await fbGetActivities(); var actsTemplate={}; activities.forEach(function(h){actsTemplate[h]=false;});
+      (rows||[]).forEach(function(r){ var id=String((r&&r.id)||''); if(!id) return; var ref=fb.db.collection('teachers').doc(id); batch.set(ref, { id:id, name:String(r.name||''), lastName:String(r.lastName||''), activities: actsTemplate, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true }); });
+      await batch.commit(); return { result: (rows||[]).map(function(r){ return { id:r&&r.id, success:true }; }) };
+    },
+    bulkSetSubjects: async function(items){
+      var fb = ensureFB(); var batch = fb.db.batch();
+      (items||[]).forEach(function(it){ var id=String((it&&it.id)||''); if(!id) return; var ref=fb.db.collection('teachers').doc(id); batch.set(ref, { subjects: Array.isArray(it.subjects)?it.subjects:[] }, { merge:true }); });
+      await batch.commit(); return { success:true };
+    }
+  };
+})();

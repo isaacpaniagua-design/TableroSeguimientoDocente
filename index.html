@@ -32,6 +32,10 @@
           },
         },
       };
+
+      (function initFirebase(){ try { var cfg = { apiKey: "AIzaSyCtLZgfTqu3lJAtpH-EtY84icBcyeLSVyE", authDomain: "tableroseguimientodocente.firebaseapp.com", projectId: "tableroseguimientodocente", storageBucket: "tableroseguimientodocente.firebasestorage.app", messagingSenderId: "270226560509", appId: "1:270226560509:web:f80aac186a6db942dfb594" }; if (window.firebase && !firebase.apps.length) { firebase.initializeApp(cfg); window.__fb = { db: firebase.firestore(), auth: firebase.auth() }; } } catch(e) { console.warn("Firebase init error", e); } })();
+
+      function initiateGoogleSignIn(){ try { if (!window.__fb || !__fb.auth) throw new Error("Firebase no inicializado"); var provider = new firebase.auth.GoogleAuthProvider(); __fb.auth.signInWithPopup(provider).then(function(){ try { document.getElementById("loginPage") && document.getElementById("loginPage").classList.add("hidden"); document.getElementById("mainDashboard") && document.getElementById("mainDashboard").classList.remove("hidden"); if (typeof initializeApp === "function") initializeApp(); } catch(e) {} }).catch(function(err){ console.error(err); alert("No se pudo iniciar sesión: "+ (err && err.message)); }); } catch(e) { console.error(e); } }
       // Ensure functions are available for inline onclick/data-callback
       if (typeof window !== 'undefined') {
         try {
@@ -44,6 +48,18 @@
         }
       }
     </script>
+
+
+
+    <!-- Firebase SDK (Compat) -->
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+</script>
 
     <style>
       .mobile-menu-open {
@@ -3138,6 +3154,11 @@
     </script>
   </body>
 </html>
+
+
+
+
+
 
 
 
