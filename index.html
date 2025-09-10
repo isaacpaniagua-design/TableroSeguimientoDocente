@@ -259,6 +259,21 @@
           transform: scale(1);
         }
       }
+
+      /* Sticky table enhancements for Gestión Docente */
+      #tableContainer { max-height: 70vh; overflow: auto; }
+      thead.sticky th { position: sticky; top: 0; z-index: 20; background: #f9fafb; }
+      .col-select { min-width: 52px; width: 52px; }
+      .col-id { min-width: 120px; width: 120px; }
+      .col-progress { min-width: 120px; width: 120px; }
+      .col-actions { min-width: 112px; width: 112px; }
+      /* Sticky columns */
+      .sticky-col-name { position: sticky; left: 172px; z-index: 10; background: #ffffff; }
+      .sticky-col-progress { position: sticky; right: 112px; z-index: 10; background: #ffffff; }
+      .sticky-col-actions { position: sticky; right: 0; z-index: 15; background: #ffffff; }
+      thead.sticky th.sticky-col-name,
+      thead.sticky th.sticky-col-progress,
+      thead.sticky th.sticky-col-actions { background: #f9fafb; z-index: 25; }
     </style>
   </head>
 
@@ -557,7 +572,12 @@
       (function(){
         function hideActivitiesUI(){
           try {
-            document.querySelectorAll('[onclick*="openActivitiesModal"]').forEach(function(el){ el.style.display = 'none'; });
+            document.querySelectorAll('[onclick*="openActivitiesModal"]').forEach(function(el){
+              try {
+                if (el.closest('#teachersSection')) return; // keep it visible in Gestión Docente
+                el.style.display = 'none';
+              } catch (_) {}
+            });
           } catch(e) {}
         }
         if (document.readyState === 'complete') hideActivitiesUI(); else window.addEventListener('load', hideActivitiesUI);
@@ -1416,7 +1436,7 @@
                       onclick="openActivitiesModal()"
                       class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
                     >
-                      <i class="fas fa-tasks mr-2"></i>Actividades
+                      <i class="fas fa-tasks mr-2"></i>Gestionar Actividades
                     </button>
                     
                   </div>
@@ -1508,7 +1528,7 @@
                 <i class="fas fa-plus mr-2"></i>Nuevo
               </button>
               <button onclick="openActivitiesModal()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
-                <i class="fas fa-tasks mr-2"></i>Actividades
+                <i class="fas fa-tasks mr-2"></i>Gestionar Actividades
               </button>
               <button
                 onclick="deleteSelected()"
@@ -1571,7 +1591,7 @@
             <!-- Teachers Table -->
             <div id="tableContainer" class="hidden overflow-x-auto">
               <table class="w-full">
-                <thead class="bg-gray-50">
+                <thead class="bg-gray-50 sticky">
                   <tr id="tableHeader">
                     <!-- Headers will be generated dynamically -->
                   </tr>
@@ -2538,6 +2558,13 @@
           const th = document.createElement("th");
           th.className =
             "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
+          // Width helpers for sticky offsets
+          if (index === 0) th.classList.add('col-select');
+          if (index === 1) th.classList.add('col-id');
+          // Mark sticky columns in header
+          if (header === 'Nombre') th.classList.add('sticky-col-name');
+          if (header === 'Progreso') th.classList.add('sticky-col-progress','col-progress');
+          if (header === 'Acciones') th.classList.add('sticky-col-actions','col-actions');
 
           if (index === 0) {
             // Select all checkbox
@@ -2566,7 +2593,7 @@
 
           // Selection checkbox
           const selectCell = document.createElement("td");
-          selectCell.className = "px-6 py-4 whitespace-nowrap";
+          selectCell.className = "px-6 py-4 whitespace-nowrap col-select";
           const selectCheckbox = document.createElement("input");
           selectCheckbox.type = "checkbox";
           selectCheckbox.className =
@@ -2578,14 +2605,14 @@
           // ID cell
           const idCell = document.createElement("td");
           idCell.className =
-            "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900";
+            "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 col-id";
           idCell.textContent = teacher.id;
           row.appendChild(idCell);
 
           // Name cell
           const nameCell = document.createElement("td");
           nameCell.className =
-            "px-6 py-4 whitespace-nowrap text-sm text-gray-900";
+            "px-6 py-4 whitespace-nowrap text-sm text-gray-900 sticky-col-name";
           nameCell.textContent = teacher.name;
           row.appendChild(nameCell);
 
@@ -2673,7 +2700,7 @@
 
           // Progress cell
           const progressCell = document.createElement("td");
-          progressCell.className = "px-6 py-4 whitespace-nowrap progress-cell";
+          progressCell.className = "px-6 py-4 whitespace-nowrap progress-cell sticky-col-progress col-progress";
           const progressPercent = (
             (completedCount / (activities.length || 1)) *
             100
@@ -2691,7 +2718,7 @@
           // Actions cell
           const actionsCell = document.createElement("td");
           actionsCell.className =
-            "px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2";
+            "px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 sticky-col-actions col-actions";
 
           const editBtn = document.createElement("button");
           editBtn.className =
@@ -2967,6 +2994,11 @@
         const container = document.getElementById("generalChartContainer");
         const statsContainer = document.getElementById("generalStats");
 
+        // Guard: require data to render
+        if (!Array.isArray(teachers) || !Array.isArray(activities) || teachers.length === 0 || activities.length === 0) {
+          return;
+        }
+
         // Destroy existing chart
         if (generalChart) {
           generalChart.destroy();
@@ -2981,7 +3013,7 @@
 
         teachers.forEach((teacher) => {
           const completed = activities.filter(
-            (activity) => teacher.activities[activity]
+            (activity) => getActivityState(teacher, activity)
           ).length;
           totalActivities += activities.length;
           completedActivities += completed;
@@ -3021,9 +3053,9 @@
             `;
 
         // Create general chart
-        const ctx = document
-          .getElementById("generalProgressChart")
-          .getContext("2d");
+        const canvas = document.getElementById("generalProgressChart");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
         generalChart = new Chart(ctx, {
           type: "doughnut",
           data: {
